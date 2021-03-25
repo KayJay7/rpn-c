@@ -1,7 +1,7 @@
 # Reverse Polish Notation Calculator
 
 A simple program that alows you to type in math expressions (even on multiple lines) in RPN and evaluate them.
-The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [GMP](https://gmplib.org/) library (thorugh [rug](https://gitlab.com/tspiteri/rug)), so your calculations will be limited by just your memory (and rational numbers).
+The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [GMP](https://gmplib.org/) library (through [rug](https://gitlab.com/tspiteri/rug)), so your calculations will be limited by just your memory (and rational numbers).
 
 This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine. At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
 
@@ -14,6 +14,9 @@ This little project started both because of necessity (I wanted a program for wr
   * `<variable_name>` identifies a variable
   * `<exp1> <exp2> (+|-|*|/)` identifies an arithmetic binary operation
     * Operations have fixed arity so parenthesis are not needed
+  * `<exp1> <exp2> <exp3> ?` if-then construct
+    * If `<exp3>` equals `0`, drops `<exp2>` evaluates and returns `<exp1>`
+    * If `<exp3>` *not* equals `0`, drops `<exp1>` evaluates and returns `<exp2>`
 * Commands (commands will not be pushed in stack):
   * `=<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
   * `=` evaluates the expression on top of the stack and prints it
@@ -45,7 +48,7 @@ Near future:
   * [ ] Remainder
 * [ ] First crates.io release
 * [ ] User defined functions
-  * [ ] `if-else`
+  * [x] `if-else`
   * [ ] Recursion
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files

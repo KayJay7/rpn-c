@@ -1,16 +1,18 @@
 use logos::Logos;
+//use rug::ops::Pow;
 use rug::Rational;
 use std::collections::HashMap;
+//use std::convert::TryFrom;
 use std::fmt;
 use std::string::String;
 
 // Readable tokens from command line
 #[derive(Logos, Debug, PartialEq, Clone)]
 enum Token {
-    #[regex("[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])+", |lex| String::from(lex.slice()))]
-    Variable(String),
+    #[regex("[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])*", |lex| String::from(lex.slice()))]
+    Identifier(String),
 
-    #[regex("=[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])+", |lex| String::from(lex.slice()))]
+    #[regex("=[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])*", |lex| String::from(lex.slice()))]
     AssignVariable(String),
 
     #[regex("[\\-\\+]?[0-9]+(/[0-9]+)?", |lex| lex.slice().parse())]
@@ -27,6 +29,18 @@ enum Token {
 
     #[regex("/")]
     Divide,
+
+    /*#[regex("\\^")]
+    Power,
+
+    #[regex("@")]
+    PowerMod,
+
+    #[regex("\\\\")]
+    IntegerDiv,
+    */
+    #[regex("\\?")]
+    If,
 
     #[regex("=")]
     Return,
@@ -55,6 +69,12 @@ enum Token {
     Error,
 }
 
+#[derive(PartialEq, Clone)]
+enum Object {
+    Variable(Rational),
+    Function(u64, Vec<Token>),
+}
+
 // Implement Display for printing
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -64,7 +84,8 @@ impl fmt::Display for Token {
             Token::Minus => write!(f, "-"),
             Token::Times => write!(f, "*"),
             Token::Divide => write!(f, "/"),
-            Token::Variable(name) => write!(f, "{}", name),
+            Token::If => write!(f, "?"),
+            Token::Identifier(name) => write!(f, "{}", name),
             _ => write!(f, "Unprintable"),
         }
     }
@@ -73,7 +94,7 @@ impl fmt::Display for Token {
 // Structure for keeping the current state of the calculator
 pub struct Calculator {
     stack: Vec<Token>,
-    table: HashMap<String, Rational>,
+    table: HashMap<String, Object>,
 }
 
 impl Calculator {
@@ -160,7 +181,7 @@ impl Calculator {
                 if let Some(val) = self.compute() {
                     // Remove '=' from the name before inserting it
                     name.remove(0);
-                    self.table.insert(name, val);
+                    self.table.insert(name, Object::Variable(val));
                 } else {
                     // Print error if arguments are missing
                     eprintln!("Incomplete expression, dropped stack");
@@ -174,9 +195,17 @@ impl Calculator {
                     match self.stack.pop() {
                         None => to_drop = 0,
 
-                        Some(Token::Number(_)) | Some(Token::Variable(_)) => to_drop -= 1,
+                        Some(Token::Identifier(name)) => match self.table.get(&name) {
+                            Some(Object::Function(arity, _)) => to_drop -= arity - 1,
+                            _ => to_drop -= 1,
+                        },
+
+                        Some(Token::Number(_)) => to_drop -= 1,
+
                         Some(Token::Plus) | Some(Token::Minus) | Some(Token::Times)
                         | Some(Token::Divide) => to_drop += 1,
+
+                        Some(Token::If) => to_drop += 2,
 
                         _ => panic!("Corrupted stack"),
                     }
@@ -197,11 +226,28 @@ impl Calculator {
                 Token::Number(num) => Some(num),
 
                 // Return variable's value
-                Token::Variable(name) => {
-                    if let Some(value) = self.table.get(&name) {
-                        Some(value.clone())
+                Token::Identifier(name) => match self.table.get(&name) {
+                    Some(Object::Variable(value)) => Some(value.clone()),
+                    Some(Object::Function(arity, ops)) => None,
+                    None => {
+                        eprintln!("Undefined name: {}", name);
+                        None
+                    }
+                },
+
+                Token::If => {
+                    let test = self.compute();
+
+                    if let Some(test) = test {
+                        if test.cmp0() == std::cmp::Ordering::Equal {
+                            self.analyze(Token::Drop);
+                            self.compute()
+                        } else {
+                            let res = self.compute();
+                            self.analyze(Token::Drop);
+                            res
+                        }
                     } else {
-                        eprintln!("Undefined variable: {}", name);
                         None
                     }
                 }
@@ -232,7 +278,15 @@ impl Calculator {
                             Token::Minus => Some(a - &b),
                             Token::Times => Some(a * &b),
                             Token::Divide => Some(a / &b),
-
+                            /*Token::Power => {
+                                if let Some(1) = b.denom().to_u32() {
+                                    let numer = a.numer().pow(b.numer());
+                                    let denom = a.denom().pow(b.numer());
+                                    Some(Rational::from((numer, denom)))
+                                } else {
+                                    None
+                                }
+                            }*/
                             // At this point, the token can only be a binary operators
                             _ => panic!("Corrupted stack"),
                         }
