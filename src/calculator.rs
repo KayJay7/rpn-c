@@ -50,7 +50,7 @@ enum Token {
     Empty,
 
     #[error]
-    #[regex("[a-zA-Z]+")]
+    #[regex(";.*", logos::skip)]
     #[regex(r"[ \t\n\f]+", logos::skip)]
     Error,
 }
@@ -64,6 +64,7 @@ impl fmt::Display for Token {
             Token::Minus => write!(f, "-"),
             Token::Times => write!(f, "*"),
             Token::Divide => write!(f, "/"),
+            Token::Variable(name) => write!(f, "{}", name),
             _ => write!(f, "Unprintable"),
         }
     }
@@ -173,20 +174,11 @@ impl Calculator {
                     match self.stack.pop() {
                         None => to_drop = 0,
 
-                        Some(Token::Flush)
-                        | Some(Token::Drop)
-                        | Some(Token::Empty)
-                        | Some(Token::Variable(_))
-                        | Some(Token::Duplicate)
-                        | Some(Token::Print)
-                        | Some(Token::Error)
-                        | Some(Token::Partial)
-                        | Some(Token::Return) => panic!("Corrupted stack"),
+                        Some(Token::Number(_)) | Some(Token::Variable(_)) => to_drop -= 1,
+                        Some(Token::Plus) | Some(Token::Minus) | Some(Token::Times)
+                        | Some(Token::Divide) => to_drop += 1,
 
-                        Some(Token::AssignVariable(_)) => {}
-
-                        Some(Token::Number(_)) => to_drop -= 1,
-                        _ => to_drop += 1,
+                        _ => panic!("Corrupted stack"),
                     }
                 }
             }

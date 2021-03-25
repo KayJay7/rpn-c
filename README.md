@@ -7,22 +7,24 @@ This little project started both because of necessity (I wanted a program for wr
 
 ## Syntax
 
-* `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
-  * The sign is optional
-  * The denominator is optional (you can't leave a pending `/` without denominator)
-* `=<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
-* `<variable_name>` identifies a variable
-* `<exp1> <exp2> (+|-|*|/)` identifies an arithmetic binary operation
-  * Operations have fixed arity so parenthesis are not needed
-* `=` evaluates the expression on top of the stack and prints it
-* `#` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
-* `:` prints the current stack
-* `>` evaluates and prints all the expressions on the stack (starting from top)
-* `<` evaluates and duplicate the expression on top of the stack
-* `!` drops the expression on top of the stack
-  * Drops the entire expression, not just the last token
-* `%` drops the entire stack
-* `;` comments the rest of the line
+* Expressions:
+  * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
+    * The sign is optional
+    * The denominator is optional (you can't leave a pending `/` without denominator)
+  * `<variable_name>` identifies a variable
+  * `<exp1> <exp2> (+|-|*|/)` identifies an arithmetic binary operation
+    * Operations have fixed arity so parenthesis are not needed
+* Commands (commands will not be pushed in stack):
+  * `=<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
+  * `=` evaluates the expression on top of the stack and prints it
+  * `#` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
+  * `:` prints the current stack
+  * `>` evaluates and prints all the expressions on the stack (starting from top)
+  * `<` evaluates and duplicate the expression on top of the stack
+  * `!` drops the expression on top of the stack
+    * Drops the entire expression, not just the last token
+  * `%` drops the entire stack
+  * `;` comments the rest of the line
 
 ## Completenes
 
@@ -36,7 +38,7 @@ It's still more than what your usual 4-op calculator can do, but it's not enough
 ## Future developement
 
 Near future:
-* [ ] Commenting
+* [x] Commenting
 * [ ] Some more basic operations
   * [ ] Powers
   * [ ] Integer division
