@@ -1,8 +1,12 @@
 [package]
 name = "rpn-c"
+description = "A calculator environment using Reverse Polish Notation and multiple precision numbers"
 version = "0.1.0"
 authors = ["alvise <alvisebruniera@gmail.com>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/KayJay7/rpn-c"
+keywords = ["rpn", "calculator", "environment", "multiple precision"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
