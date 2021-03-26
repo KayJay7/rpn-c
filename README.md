@@ -12,15 +12,19 @@ This little project started both because of necessity (I wanted a program for wr
     * The sign is optional
     * The denominator is optional (you can't leave a pending `/` without denominator)
   * `<variable_name>` identifies a variable
-  * `<exp1> <exp2> (+|-|*|/)` performs an arithmetic binary operation
+  * `<exp0> <exp1> (+|-|*|/)` performs an arithmetic binary operation
     * Operations have fixed arity so parenthesis are not needed
-  * `<exp1> <exp2> ~` perform a positive subtraction
+  * `<exp0> <exp1> ~` perform a positive subtraction
     * If the result is lesser than `0`, it returns `0`
     * It returns the result otherwise
-  * `<exp1> <exp2> <exp3> ?` if-then construct
-    * If `<exp3>` equals `0`, drops `<exp2>` evaluates and returns `<exp1>`
-    * If `<exp3>` *not* equals `0`, drops `<exp1>` evaluates and returns `<exp2>`
-* Commands (commands will not be pushed in stack):
+  * `<exp0> <exp1> <exp2> ?` if-then construct
+    * If `<exp2>` *not* equals `0`, drops `<exp1>` evaluates and returns `<exp0>`
+    * If `<exp2>` equals `0`, drops `<exp0>` evaluates and returns `<exp1>`
+  * `$<some_number>` identifies an argument
+    * Arguments can only be used inside of functions
+  * `<exp0> <exp1> ... <function_name>` calls a function
+    * Each `<expN>` corresponds to the argument `$N`
+* Commands (commands will not be pushed in stack, and aren't allowed inside of functions):
   * `<exp1> <function_name>|<arity>` declares a function of `<arity>` as `<exp1>`
   * `=<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
   * `=` evaluates the expression on top of the stack and prints it
@@ -46,14 +50,14 @@ It's still more than what your usual 4-op calculator can do, but it's not enough
 
 Near future:
 * [x] Commenting
-* [ ] Some more basic operations
+* [ ] Some more basic operations (paused)
   * [ ] Powers
   * [ ] Integer division
   * [ ] Remainder
 * [ ] First crates.io release
-* [ ] User defined functions
+* [x] User defined functions
   * [x] `if-else`
-  * [ ] Recursion
+  * [x] Recursion
 * [ ] Proof of Turing-Completeness
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
@@ -62,6 +66,7 @@ Near future:
 Maybe one day:
 * [ ] Approximation of *some* irrational operations
   * [ ] Approximation of irrational constants like pi, phi, e, log_2(10)
-* [ ] Speeding up tail recursion (basically iteration)
-* [ ] Upgrading to a real lalr (that kinda defeats the whole point)
+* [ ] Speeding up tail recursion
+  * [x] Tail recurse for single branch with recursion on `$0`
+* [ ] Upgrading to a real LALR (that kinda defeats the whole point)
 * [ ] Programming an actual compiler

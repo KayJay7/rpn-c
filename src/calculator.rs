@@ -1,8 +1,6 @@
 use logos::Logos;
-//use rug::ops::Pow;
 use rug::Rational;
 use std::collections::HashMap;
-//use std::convert::TryFrom;
 use std::fmt;
 use std::string::String;
 use Object::*;
@@ -45,13 +43,7 @@ enum Token {
     #[regex("~")]
     PositiveMinus,
 
-    /*#[regex("\\^")]
-    Power,
-
-    #[regex("@")]
-    PowerMod,
-
-    #[regex("\\\\")]
+    /*#[regex("\\\\")]
     IntegerDiv,
     */
     #[regex("\\?")]
@@ -101,6 +93,7 @@ impl fmt::Display for Token {
             Divide => write!(f, "/"),
             If => write!(f, "?"),
             PositiveMinus => write!(f, "~"),
+            Argument(index) => write!(f, "${}", index),
             Identifier(name) => write!(f, "{}", name),
             _ => write!(f, "Unprintable"),
         }
@@ -205,7 +198,7 @@ impl Calculator {
             }
 
             AssignFunction(name) => {
-                let mut to_drop = 1;
+                let mut to_copy = 1;
                 let mut i = self.stack.len();
 
                 // Split name from arity
@@ -213,26 +206,26 @@ impl Calculator {
                 let function_name = String::from(parse.next().unwrap());
                 let arity = parse.next().unwrap().parse().unwrap();
 
-                while to_drop > 0 && i > 0 {
+                while to_copy > 0 && i > 0 {
                     match &self.stack[i - 1] {
                         Identifier(name) => {
                             // Check for self reference (for recursion)
                             if name.eq(&function_name) {
-                                to_drop += arity - 1;
+                                to_copy += arity - 1;
                             } else {
                                 // Check table
                                 match self.table.get(name) {
-                                    Some(Function(arity, _)) => to_drop += arity - 1,
-                                    _ => to_drop -= 1,
+                                    Some(Function(arity, _)) => to_copy += arity - 1,
+                                    _ => to_copy -= 1,
                                 }
                             }
                         }
 
-                        Number(_) | Argument(_) => to_drop -= 1,
+                        Number(_) | Argument(_) => to_copy -= 1,
 
-                        Plus | Minus | Times | Divide | PositiveMinus => to_drop += 1,
+                        Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
 
-                        If => to_drop += 2,
+                        If => to_copy += 2,
 
                         _ => panic!("Corrupted stack"),
                     }
@@ -241,7 +234,7 @@ impl Calculator {
                     i -= 1;
                 }
 
-                if to_drop == 0 {
+                if to_copy == 0 {
                     self.table
                         .insert(function_name, Function(arity, self.stack.split_off(i)));
                 } else {
@@ -287,25 +280,72 @@ impl Calculator {
                 Number(num) => Some(num),
 
                 // Return variable's value
-                Identifier(name) => match self.table.get(&name) {
-                    Some(Variable(value)) => Some(value.clone()),
-                    Some(Function(arity, ops)) => None,
-                    None => {
+                Identifier(name) => {
+                    let id = self.table.get(&name);
+                    if let None = id {
+                        // Stops if identifier is undefined
                         eprintln!("Undefined name: {}", name);
                         None
+                    } else {
+                        // Cloning is required in order to borrow selg again later
+                        // id cannot be None in this branch
+                        let id = id.unwrap().clone();
+                        match id {
+                            // If a variable, return it's value
+                            Variable(value) => Some(value),
+                            Function(arity, ops) => {
+                                let mut args = vec![None; arity];
+
+                                // Compute all args in advance
+                                for i in 0..arity {
+                                    let arg = self.compute();
+                                    if let Some(_) = arg {
+                                        args[arity - i - 1] = arg;
+                                    } else {
+                                        // Stop if some arguments can't be computed
+                                        return None;
+                                    }
+                                }
+
+                                for token in ops {
+                                    match token {
+                                        // Replace argument names with argument values
+                                        Argument(index) => {
+                                            if index >= args.len() {
+                                                eprintln!("Argument ${} out of bound in function {}|{}, dropped arguments", index, name, arity);
+                                                // Stops if argument out of bounds
+                                                return None;
+                                            }
+                                            self.stack.push(Number(args[index].clone().unwrap()));
+                                        }
+
+                                        // Push operations in stack
+                                        _ => self.stack.push(token.clone()),
+                                    }
+                                }
+
+                                // Compute the function copied in stack
+                                self.compute()
+                            }
+                        }
                     }
-                },
+                }
 
                 If => {
                     let test = self.compute();
 
                     if let Some(test) = test {
-                        if test.cmp0() == std::cmp::Ordering::Equal {
+                        if test.cmp0() != std::cmp::Ordering::Equal {
+                            // Drop $1
                             self.analyze(Drop);
+                            // Executes and returns $0
                             self.compute()
                         } else {
+                            // Executes $1
                             let res = self.compute();
+                            // Drop $0
                             self.analyze(Drop);
+                            // Returns $1
                             res
                         }
                     } else {
@@ -338,22 +378,13 @@ impl Calculator {
                             Times => Some(a * &b),
                             Divide => Some(a / &b),
                             PositiveMinus => {
-                                let c = a / &b;
-                                if c.cmp0() > std::cmp::Ordering::Greater {
+                                let c = a - &b;
+                                if c.cmp0() != std::cmp::Ordering::Less {
                                     Some(c)
                                 } else {
                                     Some(Rational::from(0))
                                 }
                             }
-                            /*Power => {
-                                if let Some(1) = b.denom().to_u32() {
-                                    let numer = a.numer().pow(b.numer());
-                                    let denom = a.denom().pow(b.numer());
-                                    Some(Rational::from((numer, denom)))
-                                } else {
-                                    None
-                                }
-                            }*/
                             // At this point, the token can only be a binary operators
                             _ => panic!("Corrupted stack"),
                         }
