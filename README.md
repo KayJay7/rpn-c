@@ -5,6 +5,11 @@ The program keeps a table of golbal variables so you can store values for later 
 
 This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine. At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
 
+Get it from crates.io using:
+```Bash
+cargo install rpn-c
+```
+
 ## Syntax (rpn-l)
 
 rpn-l is the language used by (and developed for) rpn-c. It's not really user friendly, but it works, and will allow you to write your own scripts and functions for your quick calculation needs.
