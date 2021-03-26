@@ -142,7 +142,7 @@ Near future:
   * [x] `if-else`
   * [x] Recursion
 * [x] Proof of Turing-Completeness
-* [ ] First crates.io release
+* [x] First crates.io release
 * [ ] Solve the stack overflow issue
   * [ ] Rewrite the executor so that it doesn't use recursion
 * [ ] A decent prompt (with history)
