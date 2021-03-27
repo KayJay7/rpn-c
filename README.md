@@ -13,6 +13,14 @@ cargo install rpn-c
 ## Syntax (rpn-l)
 
 rpn-l is the language used by (and developed for) rpn-c. It's not really user friendly, but it works, and will allow you to write your own scripts and functions for your quick calculation needs.
+The language is defined with fixed arity, so that you don't need parenthesis.
+
+rpn-l statements are composed from two types of tokens: expressions, which can be composed with other expressions to for new ones; and commands, which cannot be composed but sometime requires to be preceded by an expression.
+All expression tokens get pushed on top of the stack from left to right, but are not evaluated. When (always from left to right) rpn-c encounters a command, this can cause the evaluation of the last expression pushed to the stack, or some other side effects.
+Commands cause actions, they aren't pushed in stack, this means that they cannot get called from inside a function.
+
+rpn-c maintains a table of all the identifiers and their meaning, only commands can alter this table, making it immutable for expression and functions.
+This looks like a limitation, but immutability allows the evaluation tree to be executed in any order or even in parallel.
 
 * Expressions:
   * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
@@ -31,18 +39,22 @@ rpn-l is the language used by (and developed for) rpn-c. It's not really user fr
     * Arguments can only be used inside of functions
   * `<exp0> <exp1> ... <function_name>` calls a function
     * Each `<expN>` corresponds to the argument `$N`
-* Commands (commands will not be pushed in stack, and aren't allowed inside of functions):
-  * `<exp1> <function_name>|<arity>` declares a function of `<arity>` as `<exp1>`
-  * `=<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
-  * `=` evaluates the expression on top of the stack and prints it
-  * `#` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
+* Commands
+  * `<exp0> <function_name>|<arity>` declares a function of `<arity>` as `<exp1>`
+    * Functions are evaluated when they get executed, if an identifier change its meaning, the functions that refere to it will change behaviour, remember to update them
+    * Sometimes you might want to define a function, refere it from another, than change the first function
+      * This enables mutual recursion between functions
+      * Remember to maintain the same arity or this will break the other function
+  * `<exp0> =<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
+  * `<exp0> =` evaluates the expression on top of the stack and prints it
+  * `<exp0> #` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
   * `:` prints the current stack
   * `>` evaluates and prints all the expressions on the stack (starting from top)
-  * `<` evaluates and duplicate the expression on top of the stack
-  * `!` drops the expression on top of the stack
+  * `<exp0> <` evaluates and duplicate the expression on top of the stack
+  * `<exp0> !` drops the expression on top of the stack
     * Drops the entire expression, not just the last token
   * `%` drops the entire stack
-  * `;` comments the rest of the line
+  * `;<some_comment>` comments the rest of the line
 
 ## Completeness
 
@@ -56,7 +68,7 @@ It's still more than what your usual 4-op calculator can do, but it's not enough
 ## Proof of Turing-Completeness and Equivalence
 
 The completeness of the language will be proved by simulating the primitives and the behaviour of the operators required for the construction μ-recursive functions, using a subset of the actual rpn-l language.
-The subset consists of the operators `+` and `~`, the definition of N-ary functions, and the integer literals `0` and `1`; the `=` command is not needed for this proof, but it's needed to run the function defined this way.
+The subset consists of the operators `+` and `~`, the definition of N-ary functions, and the integer literals `0` and `1`; the `=` command is not needed for this proof, but it's needed to run the functions defined this way.
 Other features of the language are not needed for completeness but make the language more usable.
 
 ### Primitive functions
