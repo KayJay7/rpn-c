@@ -1,4 +1,5 @@
 use logos::Logos;
+use rayon::prelude::*;
 use rug::Rational;
 use std::collections::HashMap;
 use std::fmt;
@@ -367,35 +368,67 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
 }
 
 impl ExecTree {
+    // The result needs to be optional because
+    // we don't know in advance if a function contains errors
     pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
-        let ExecTree { token, arguments } = self;
-
-        let mut args: Vec<Option<Rational>> = Vec::new();
-        for arg in arguments {
-            args.push(arg.reduce(table));
-        }
+        let ExecTree {
+            token,
+            mut arguments,
+        } = self;
 
         match token {
+            If => {
+                // The if-else statement will not evaluate all of it's arguments
+                let condition = arguments.pop().unwrap().reduce(table);
+
+                if let Some(condition) = condition {
+                    if condition.cmp0() == std::cmp::Ordering::Equal {
+                        // Execute the right arm
+                        arguments.pop().unwrap().reduce(table)
+                    } else {
+                        // Drop the right arm
+                        arguments.pop();
+                        // Execute the left arm
+                        arguments.pop().unwrap().reduce(table)
+                    }
+                } else {
+                    None
+                }
+            }
+
             Number(value) => Some(value),
 
+            // Arithmetic operations
             _ => {
-                let b = args.pop().unwrap().unwrap();
-                let a = args.pop().unwrap().unwrap();
+                // Start by executing every (2) argument
+                let mut args: Vec<Option<Rational>> = arguments
+                    .into_par_iter()
+                    .map(|arg| arg.reduce(table))
+                    .collect();
 
-                match token {
-                    Plus => Some(a + b),
-                    Minus => Some(a - b),
-                    Times => Some(a * b),
-                    Divide => Some(a / b),
-                    PositiveMinus => {
-                        let c = a - &b;
-                        if c.cmp0() != std::cmp::Ordering::Less {
-                            Some(c)
-                        } else {
-                            Some(Rational::from(0))
+                let b = args.pop();
+                let a = args.pop();
+
+                if let (Some(Some(a)), Some(Some(b))) = (a, b) {
+                    match token {
+                        Plus => Some(a + b),
+                        Minus => Some(a - b),
+                        Times => Some(a * b),
+                        Divide => Some(a / b),
+                        PositiveMinus => {
+                            let c = a - &b;
+                            if c.cmp0() != std::cmp::Ordering::Less {
+                                Some(c)
+                            } else {
+                                Some(Rational::from(0))
+                            }
                         }
+
+                        // All the other tokens will never enter the tree
+                        _ => panic!("Corrupted stack"),
                     }
-                    _ => unimplemented!(),
+                } else {
+                    None
                 }
             }
         }
