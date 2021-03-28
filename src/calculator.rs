@@ -1,7 +1,3 @@
-use async_recursion::async_recursion;
-use async_std::task;
-use futures::future::BoxFuture;
-use futures::join;
 use logos::Logos;
 use rug::Rational;
 use std::collections::HashMap;
@@ -276,235 +272,147 @@ impl Calculator {
     }
 }
 
-#[async_recursion]
-async fn number(value: Option<Rational>) -> Option<Rational> {
-    value
-}
-
-#[async_recursion]
-async fn math_operation<'a>(
+struct ExecTree {
     token: Token,
-    left: BoxFuture<'static, Option<Rational>>,
-    right: BoxFuture<'static, Option<Rational>>,
-) -> Option<Rational> {
-    if let (Some(a), Some(b)) = join!(left, right) {
-        match token {
-            Plus => Some(a + &b),
-            Minus => Some(a - &b),
-            Times => Some(a * &b),
-            Divide => Some(a / &b),
-            PositiveMinus => {
-                let c = a - &b;
-                if c.cmp0() != std::cmp::Ordering::Less {
-                    Some(c)
-                } else {
-                    Some(Rational::from(0))
+    arguments: Vec<ExecTree>,
+}
+
+fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Token> {
+    let mut to_copy = 1;
+    let mut i = stack.len();
+
+    while to_copy > 0 && i > 0 {
+        match &stack[i - 1] {
+            Identifier(name) => {
+                // Check table
+                match table.get(name) {
+                    Some(Function(arity, _)) => to_copy += arity - 1,
+                    _ => to_copy -= 1,
                 }
             }
-            _ => panic!("Corrupted stack!"),
+
+            Number(_) | Argument(_) => to_copy -= 1,
+
+            Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
+
+            If => to_copy += 2,
+
+            _ => panic!("Corrupted stack"),
         }
+
+        // Moves index
+        i -= 1;
+    }
+
+    if to_copy == 0 {
+        stack.split_off(i)
     } else {
-        None
+        eprintln!("Incomplete expression, preserved stack");
+        Vec::new()
     }
 }
 
-impl Calculator {
-    // Compute top of stack and returns it
-    // Returns None if the stack empties in advance
-    fn compute(&mut self) -> Option<Rational> {
-        let mut to_execute = 1;
-        let mut reversed = Vec::new();
-        let mut arguments = Vec::new();
+fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
+    let mut arguments = Vec::new();
 
-        while to_execute > 0 {
-            if let Some(token) = self.stack.pop() {
-                match &token {
-                    Identifier(name) => match self.table.get(name) {
-                        Some(Function(arity, _)) => {
-                            to_execute += arity - 1;
-                            reversed.push(token);
-                        }
-                        Some(Variable(_)) => {
-                            to_execute -= 1;
-                            reversed.push(token);
-                        }
-                        None => {
-                            eprintln!("Undefined name: stack partially dropped");
-                            return None;
-                        }
-                    },
-
-                    Number(_) | Argument(_) => {
-                        to_execute -= 1;
-                        reversed.push(token);
-                    }
-
-                    Plus | Minus | Times | Divide | PositiveMinus => {
-                        to_execute += 1;
-                        reversed.push(token);
-                    }
-
-                    If => {
-                        to_execute += 2;
-                        reversed.push(token);
-                    }
-
-                    _ => panic!("Corrupted stack"),
+    for token in stack {
+        match token {
+            Identifier(ref name) => match table.get(name) {
+                Some(Function(arity, _)) => {
+                    let len = arguments.len();
+                    let args = arguments.split_off(len - arity);
+                    arguments.push(ExecTree {
+                        token,
+                        arguments: args,
+                    });
                 }
-            } else {
-                to_execute = 0;
-            }
-        }
-
-        while let Some(token) = reversed.pop() {
-            match token {
-                Number(value) => arguments.push(number(Some(value))),
-                Plus | Minus | Times | Divide | PositiveMinus => {
-                    let right = arguments.pop().unwrap();
-                    let left = arguments.pop().unwrap();
-                    let op = math_operation(token, left, right);
-                    arguments.push(op);
-                }
-                _ => unimplemented!(),
-            }
-        }
-
-        task::block_on(arguments.pop().unwrap())
-    }
-}
-
-// Legacy first version of the compute() method purely stack based
-// It was so stack based it caused stack overflows with just 2000 recusive calls
-// It's kept here as a tribute
-/*
-impl Calculator {
-    // Compute top of stack and returns it
-    // Returns None if the stack empties in advance
-    fn compute(&mut self) -> Option<Rational> {
-        if let Some(token) = self.stack.pop() {
-            match token {
-                // Return numers as is
-                Number(num) => Some(num),
-
-                // Return variable's value
-                Identifier(name) => {
-                    let id = self.table.get(&name);
-                    if let None = id {
-                        // Stops if identifier is undefined
-                        eprintln!("Undefined name: {}", name);
-                        None
-                    } else {
-                        // Cloning is required in order to borrow selg again later
-                        // id cannot be None in this branch
-                        let id = id.unwrap().clone();
-                        match id {
-                            // If a variable, return it's value
-                            Variable(value) => Some(value),
-                            Function(arity, ops) => {
-                                let mut args = vec![None; arity];
-
-                                // Compute all args in advance
-                                for i in 0..arity {
-                                    let arg = self.compute();
-                                    if let Some(_) = arg {
-                                        args[arity - i - 1] = arg;
-                                    } else {
-                                        // Stop if some arguments can't be computed
-                                        return None;
-                                    }
-                                }
-
-                                for token in ops {
-                                    match token {
-                                        // Replace argument names with argument values
-                                        Argument(index) => {
-                                            if index >= args.len() {
-                                                eprintln!("Argument ${} out of bound in function {}|{}, dropped arguments", index, name, arity);
-                                                // Stops if argument out of bounds
-                                                return None;
-                                            }
-                                            self.stack.push(Number(args[index].clone().unwrap()));
-                                        }
-
-                                        // Push operations in stack
-                                        _ => self.stack.push(token.clone()),
-                                    }
-                                }
-
-                                // Compute the function copied in stack
-                                self.compute()
-                            }
-                        }
-                    }
-                }
-
-                If => {
-                    let test = self.compute();
-
-                    if let Some(test) = test {
-                        if test.cmp0() != std::cmp::Ordering::Equal {
-                            // Drop $1
-                            self.analyze(Drop);
-                            // Executes and returns $0
-                            self.compute()
-                        } else {
-                            // Executes $1
-                            let res = self.compute();
-                            // Drop $0
-                            self.analyze(Drop);
-                            // Returns $1
-                            res
-                        }
-                    } else {
-                        None
-                    }
-                }
-
-                // This tokens will never be on stack
-                Flush | Drop | Empty | AssignVariable(_) | AssignFunction(_) | Duplicate
-                | Print | Error | Partial | Return => panic!("Corrupted stack"),
-
-                Argument(_) => {
-                    eprintln!("Arguments cannot be used outside of functions");
-                    None
-                }
-
-                // Binary operators are the only tokens left
                 _ => {
-                    // Compute arguments
-                    let b = self.compute();
-                    let a = self.compute();
+                    arguments.push(ExecTree {
+                        token,
+                        arguments: Vec::new(),
+                    });
+                }
+            },
 
-                    // If both computed sucesfully combine and return
-                    if let (Some(a), Some(b)) = (a, b) {
-                        match token {
-                            // Operations on borrowed values may return incomplete results
-                            // Using incomplete results might make long operations faster
-                            Plus => Some(a + &b),
-                            Minus => Some(a - &b),
-                            Times => Some(a * &b),
-                            Divide => Some(a / &b),
-                            PositiveMinus => {
-                                let c = a - &b;
-                                if c.cmp0() != std::cmp::Ordering::Less {
-                                    Some(c)
-                                } else {
-                                    Some(Rational::from(0))
-                                }
-                            }
-                            // At this point, the token can only be a binary operators
-                            _ => panic!("Corrupted stack"),
+            Number(_) | Argument(_) => {
+                arguments.push(ExecTree {
+                    token,
+                    arguments: Vec::new(),
+                });
+            }
+
+            Plus | Minus | Times | Divide | PositiveMinus => {
+                let len = arguments.len();
+                let args = arguments.split_off(len - 2);
+                arguments.push(ExecTree {
+                    token,
+                    arguments: args,
+                });
+            }
+
+            If => {
+                let len = arguments.len();
+                let args = arguments.split_off(len - 3);
+                arguments.push(ExecTree {
+                    token,
+                    arguments: args,
+                });
+            }
+
+            _ => panic!("Corrupted stack"),
+        }
+    }
+
+    arguments.pop().unwrap()
+}
+
+impl ExecTree {
+    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
+        let ExecTree { token, arguments } = self;
+
+        let mut args: Vec<Option<Rational>> = Vec::new();
+        for arg in arguments {
+            args.push(arg.reduce(table));
+        }
+
+        match token {
+            Number(value) => Some(value),
+
+            _ => {
+                let b = args.pop().unwrap().unwrap();
+                let a = args.pop().unwrap().unwrap();
+
+                match token {
+                    Plus => Some(a + b),
+                    Minus => Some(a - b),
+                    Times => Some(a * b),
+                    Divide => Some(a / b),
+                    PositiveMinus => {
+                        let c = a - &b;
+                        if c.cmp0() != std::cmp::Ordering::Less {
+                            Some(c)
+                        } else {
+                            Some(Rational::from(0))
                         }
-                    } else {
-                        // Return None if arguments didn't compute
-                        None
                     }
+                    _ => unimplemented!(),
                 }
             }
-        } else {
-            // Return None if stack is empty
-            None
         }
     }
 }
-*/
+
+impl Calculator {
+    // Compute top of stack and returns it
+    // Returns None if the stack empties in advance
+    fn compute(&mut self) -> Option<Rational> {
+        // Pop first expression
+        let expression = clip_head(&mut self.stack, &self.table);
+
+        // Parse execution tree from expression
+        let tree = parse_tree(expression, &self.table);
+
+        // Calculate value for exevution tree
+        tree.reduce(&self.table)
+    }
+}
