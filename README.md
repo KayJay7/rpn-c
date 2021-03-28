@@ -2,11 +2,12 @@
 
 A simple program that alows you to type in math expressions (even on multiple lines) in RPN and evaluate them.
 The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [GMP](https://gmplib.org/) library (through [rug](https://gitlab.com/tspiteri/rug)), so your calculations will be limited by just your memory (and rational numbers).
+rpn-c is also parallelized using [rayon](https://github.com/rayon-rs/rayon), so you can evaluate multiple expressions at the same time.
 
 This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine. At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
 
 Get it from crates.io using:
-```Bash
+```sh
 cargo install rpn-c
 ```
 
@@ -20,7 +21,7 @@ All expression tokens get pushed on top of the stack from left to right, but are
 Commands cause actions, they aren't pushed in stack, this means that they cannot get called from inside a function.
 
 rpn-c maintains a table of all the identifiers and their meaning, only commands can alter this table, making it immutable for expression and functions.
-This looks like a limitation, but immutability allows the evaluation tree to be executed in any order or even in parallel.
+This looks like a limitation, but immutability allows the evaluation tree to be executed in parallel.
 
 * Expressions:
   * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
@@ -161,7 +162,10 @@ Near future:
 * [x] Proof of Turing-Completeness
 * [x] First crates.io release
 * [ ] Solve the stack overflow issue
-  * [ ] Rewrite the executor so that it doesn't use recursion
+  * Rewrite the executor so that it doesn't use recursion
+    * Would probably cause less parallelization
+  * [ ] Allow writing iterative recursive functions
+* [x] Add parallelization
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
 * [ ] Output to file (silent mode)
@@ -170,5 +174,6 @@ Maybe one day:
 * [ ] Approximation of *some* irrational operations
   * [ ] Approximation of irrational constants like pi, phi, e, log_2(10)
 * [ ] Speeding up tail recursion
+  * [ ] Add some form of iteration without recursion
 * [ ] Upgrading to a real LALR (that kinda defeats the whole point)
 * [ ] Programming an actual compiler
