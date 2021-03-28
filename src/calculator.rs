@@ -1,3 +1,7 @@
+use async_recursion::async_recursion;
+use async_std::task;
+use futures::future::BoxFuture;
+use futures::join;
 use logos::Logos;
 use rug::Rational;
 use std::collections::HashMap;
@@ -270,7 +274,110 @@ impl Calculator {
             _ => self.stack.push(token),
         }
     }
+}
 
+#[async_recursion]
+async fn number(value: Option<Rational>) -> Option<Rational> {
+    value
+}
+
+#[async_recursion]
+async fn math_operation<'a>(
+    token: Token,
+    left: BoxFuture<'static, Option<Rational>>,
+    right: BoxFuture<'static, Option<Rational>>,
+) -> Option<Rational> {
+    if let (Some(a), Some(b)) = join!(left, right) {
+        match token {
+            Plus => Some(a + &b),
+            Minus => Some(a - &b),
+            Times => Some(a * &b),
+            Divide => Some(a / &b),
+            PositiveMinus => {
+                let c = a - &b;
+                if c.cmp0() != std::cmp::Ordering::Less {
+                    Some(c)
+                } else {
+                    Some(Rational::from(0))
+                }
+            }
+            _ => panic!("Corrupted stack!"),
+        }
+    } else {
+        None
+    }
+}
+
+impl Calculator {
+    // Compute top of stack and returns it
+    // Returns None if the stack empties in advance
+    fn compute(&mut self) -> Option<Rational> {
+        let mut to_execute = 1;
+        let mut reversed = Vec::new();
+        let mut arguments = Vec::new();
+
+        while to_execute > 0 {
+            if let Some(token) = self.stack.pop() {
+                match &token {
+                    Identifier(name) => match self.table.get(name) {
+                        Some(Function(arity, _)) => {
+                            to_execute += arity - 1;
+                            reversed.push(token);
+                        }
+                        Some(Variable(_)) => {
+                            to_execute -= 1;
+                            reversed.push(token);
+                        }
+                        None => {
+                            eprintln!("Undefined name: stack partially dropped");
+                            return None;
+                        }
+                    },
+
+                    Number(_) | Argument(_) => {
+                        to_execute -= 1;
+                        reversed.push(token);
+                    }
+
+                    Plus | Minus | Times | Divide | PositiveMinus => {
+                        to_execute += 1;
+                        reversed.push(token);
+                    }
+
+                    If => {
+                        to_execute += 2;
+                        reversed.push(token);
+                    }
+
+                    _ => panic!("Corrupted stack"),
+                }
+            } else {
+                to_execute = 0;
+            }
+        }
+
+        while let Some(token) = reversed.pop() {
+            match token {
+                Number(value) => arguments.push(number(Some(value))),
+                Plus | Minus | Times | Divide | PositiveMinus => {
+                    let right = arguments.pop().unwrap();
+                    let left = arguments.pop().unwrap();
+                    let op = math_operation(token, left, right);
+                    arguments.push(op);
+                }
+                _ => unimplemented!(),
+            }
+        }
+
+        task::block_on(arguments.pop().unwrap())
+    }
+}
+
+// Legacy first version of the compute() method purely stack based
+// It was so stack based it caused stack overflows with just 2000 recusive calls
+// It's kept here as a tribute
+/*
+impl Calculator {
     // Compute top of stack and returns it
     // Returns None if the stack empties in advance
     fn compute(&mut self) -> Option<Rational> {
@@ -400,3 +507,4 @@ impl Calculator {
         }
     }
 }
+*/

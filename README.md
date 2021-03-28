@@ -101,7 +101,7 @@ $I P|N
 
 #### Composition operator
 
-It's possible to define a K-ary function `g` parameters by composing K N-ary functions `fk` and one K-ary function `h`.
+It's possible to define a K-ary function `g` by composing K N-ary functions `fk` and one K-ary function `h`.
 
 ```rpn-l
 $0 ... $N-1 f1
