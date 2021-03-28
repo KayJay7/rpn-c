@@ -139,7 +139,7 @@ impl Calculator {
                     println!("> {}", num);
                 } else {
                     // Print error if arguments are missing
-                    eprintln!("Incomplete expression, dropped stack");
+                    eprintln!("Incomplete expression");
                 }
             }
 
@@ -151,7 +151,7 @@ impl Calculator {
                     self.stack.push(Number(num));
                 } else {
                     // Print error if arguments are missing
-                    eprintln!("Incomplete expression, dropped stack");
+                    eprintln!("Incomplete expression");
                 }
             }
 
@@ -167,8 +167,13 @@ impl Calculator {
 
             // Compute and print entire stack
             Flush => {
-                while self.stack.len() > 0 {
-                    self.analyze(Return);
+                for result in self.compute_all() {
+                    if let Some(num) = result {
+                        println!("> {}", num);
+                    } else {
+                        // Print error if arguments are missing
+                        eprintln!("Incomplete expression");
+                    }
                 }
             }
 
@@ -243,7 +248,7 @@ impl Calculator {
                     self.table
                         .insert(function_name, Function(arity, self.stack.split_off(i)));
                 } else {
-                    eprintln!("Incomplete function declaration, preserved stack");
+                    eprintln!("Incomplete function declaration");
                 }
             }
 
@@ -303,7 +308,12 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
                 }
             }
 
-            Number(_) | Argument(_) => to_copy -= 1,
+            Number(_) => to_copy -= 1,
+
+            Argument(_) => {
+                eprintln!("Arguments are only allowed in functions");
+                i = 1;
+            }
 
             Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
 
@@ -321,7 +331,6 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
         stack.split_off(i)
     } else {
         // otherwise returns an empty stack
-        eprintln!("Incomplete expression, preserved stack");
         Vec::new()
     }
 }
@@ -442,8 +451,24 @@ impl ExecTree {
                                 return None;
                             }
 
+                            if ops
+                                .par_iter()
+                                .filter(|op| {
+                                    if let Argument(index) = op {
+                                        index >= arity
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .count()
+                                > 0
+                            {
+                                eprintln!("Arguments exceeded arity in function: \"{}\"", name);
+                                return None;
+                            }
+
                             // Substitute the arguments ops stack
-                            let ops: Vec<Token> = ops
+                            let mut dirty_ops: Vec<Token> = ops
                                 .par_iter()
                                 .map(|op| {
                                     if let Argument(index) = op {
@@ -453,6 +478,16 @@ impl ExecTree {
                                     }
                                 })
                                 .collect();
+
+                            let ops = clip_head(&mut dirty_ops, table);
+                            if ops.len() == 0 {
+                                eprintln!("Invalid function: \"{}\", dropped stack", name);
+                                return None;
+                            }
+
+                            if dirty_ops.len() != 0 {
+                                eprintln!("Warning! function: \"{}\" is still executable but may contain errors!\nIts advisable to update its definition", name);
+                            }
 
                             let tree = parse_tree(ops, table);
 
@@ -512,10 +547,47 @@ impl Calculator {
         // Pop first expression
         let expression = clip_head(&mut self.stack, &self.table);
 
+        // Return none if the expression was incomplete
+        if expression.len() == 0 {
+            return None;
+        }
+
         // Parse execution tree from expression
         let tree = parse_tree(expression, &self.table);
 
         // Calculate value for exevution tree
         tree.reduce(&self.table)
+    }
+
+    fn compute_all(&mut self) -> Vec<Option<Rational>> {
+        let mut all_trees = Vec::new();
+
+        let mut found_incomplete = false;
+
+        while self.stack.len() > 0 && !found_incomplete {
+            let expression = clip_head(&mut self.stack, &self.table);
+
+            if expression.len() > 0 {
+                // Parse execution tree from expression
+                let tree = parse_tree(expression, &self.table);
+
+                // Calculate value for exevution tree
+                all_trees.push(Some(tree));
+            } else {
+                found_incomplete = true;
+                all_trees.push(None);
+            }
+        }
+
+        all_trees
+            .into_par_iter()
+            .map(|tree| {
+                if let Some(tree) = tree {
+                    tree.reduce(&self.table)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
