@@ -212,11 +212,15 @@ impl Calculator {
                         Identifier(name) => {
                             // Check for self reference (for recursion)
                             if name.eq(&function_name) {
-                                to_copy += arity - 1;
+                                to_copy += arity;
+                                to_copy -= 1;
                             } else {
                                 // Check table
                                 match self.table.get(name) {
-                                    Some(Function(arity, _)) => to_copy += arity - 1,
+                                    Some(Function(arity, _)) => {
+                                        to_copy += arity;
+                                        to_copy -= 1;
+                                    }
                                     _ => to_copy -= 1,
                                 }
                             }
@@ -251,7 +255,10 @@ impl Calculator {
                         None => to_drop = 0,
 
                         Some(Identifier(name)) => match self.table.get(&name) {
-                            Some(Function(arity, _)) => to_drop += arity - 1,
+                            Some(Function(arity, _)) => {
+                                to_drop += arity;
+                                to_drop -= 1;
+                            }
                             _ => to_drop -= 1,
                         },
 
@@ -282,12 +289,16 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
     let mut to_copy = 1;
     let mut i = stack.len();
 
+    // Counts arguments until it reaches 0 or the stack ends
     while to_copy > 0 && i > 0 {
         match &stack[i - 1] {
             Identifier(name) => {
                 // Check table
                 match table.get(name) {
-                    Some(Function(arity, _)) => to_copy += arity - 1,
+                    Some(Function(arity, _)) => {
+                        to_copy += arity;
+                        to_copy -= 1;
+                    }
                     _ => to_copy -= 1,
                 }
             }
@@ -306,8 +317,10 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
     }
 
     if to_copy == 0 {
+        // If it made it to the end, split on i
         stack.split_off(i)
     } else {
+        // otherwise returns an empty stack
         eprintln!("Incomplete expression, preserved stack");
         Vec::new()
     }
@@ -316,6 +329,9 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
 fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
     let mut arguments = Vec::new();
 
+    // Builds the tree from the stack
+    // Each token gets built into a tree node and put on an arguments stack
+    // when building a node, it pops arguments from the stack an pass them to the node
     for token in stack {
         match token {
             Identifier(ref name) => match table.get(name) {
@@ -364,13 +380,20 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
         }
     }
 
+    // At the end, the only argument in stack will be the root node of the computation
     arguments.pop().unwrap()
 }
 
+// Iterative Fibonacci for testing
+// $1 $0 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec fib|1
+//
+// Naive Fibonacci for testing
+// $0 1 ~ nfib $0 2 ~ +  $0 $0 1 ~ nfib|1
 impl ExecTree {
     // The result needs to be optional because
     // we don't know in advance if a function contains errors
     pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
+        // Estract token and arguments from self (so you can move them indipendently)
         let ExecTree {
             token,
             mut arguments,
@@ -398,6 +421,49 @@ impl ExecTree {
 
             Number(value) => Some(value),
 
+            Identifier(name) => {
+                if let Some(id) = table.get(&name) {
+                    match id {
+                        Variable(value) => Some(value.clone()),
+                        Function(arity, ops) => {
+                            // Stop for invalid input before evaluating arguments
+                            if arguments.len() != *arity {
+                                return None;
+                            }
+
+                            // Start by executing every argument
+                            let args: Vec<Option<Rational>> = arguments
+                                .into_par_iter()
+                                .map(|arg| arg.reduce(table))
+                                .collect();
+
+                            // Check is some arguments didn't compute
+                            if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+                                return None;
+                            }
+
+                            // Substitute the arguments ops stack
+                            let ops: Vec<Token> = ops
+                                .par_iter()
+                                .map(|op| {
+                                    if let Argument(index) = op {
+                                        Number(args[*index].clone().unwrap())
+                                    } else {
+                                        op.clone()
+                                    }
+                                })
+                                .collect();
+
+                            let tree = parse_tree(ops, table);
+
+                            tree.reduce(table)
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
@@ -406,9 +472,12 @@ impl ExecTree {
                     .map(|arg| arg.reduce(table))
                     .collect();
 
+                // Move args out of array (you can't add borrows)
                 let b = args.pop();
                 let a = args.pop();
 
+                // Execute only if both arguments computed
+                // One 'Some' is for the pop operation (it will never be None)
                 if let (Some(Some(a)), Some(Some(b))) = (a, b) {
                     match token {
                         Plus => Some(a + b),
@@ -428,6 +497,7 @@ impl ExecTree {
                         _ => panic!("Corrupted stack"),
                     }
                 } else {
+                    // Return None if an argument didn't compute
                     None
                 }
             }
