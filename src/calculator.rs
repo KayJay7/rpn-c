@@ -19,6 +19,9 @@ enum Token {
     #[regex("[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])*\\|[0-9]+", |lex| String::from(lex.slice()))]
     AssignFunction(String),
 
+    #[regex("[a-zA-Z]([a-zA-Z0-9]|-[a-zA-Z0-9]|_[a-zA-Z0-9])*@[0-9]+", |lex| String::from(lex.slice()))]
+    AssignIterative(String),
+
     #[regex("\\$[0-9]+", |lex| {
         let mut parse = lex.slice().split('$');
         parse.next();
@@ -81,6 +84,7 @@ enum Token {
 enum Object {
     Variable(Rational),
     Function(usize, Vec<Token>),
+    Iterative(usize, Vec<Vec<Token>>),
 }
 
 // Implement Display for printing
@@ -252,6 +256,57 @@ impl Calculator {
                 }
             }
 
+            AssignIterative(name) => {
+                let mut to_copy = 1;
+                let mut i = self.stack.len();
+
+                // Split name from arity
+                let mut parse = name.split('@');
+                let function_name = String::from(parse.next().unwrap());
+                let arity = parse.next().unwrap().parse().unwrap();
+
+                while to_copy > 0 && i > 0 {
+                    match &self.stack[i - 1] {
+                        Identifier(name) => {
+                            // Check for self reference (for recursion)
+                            if name.eq(&function_name) {
+                                to_copy += arity;
+                                to_copy -= 1;
+                            } else {
+                                // Check table
+                                match self.table.get(name) {
+                                    Some(Function(arity, _)) => {
+                                        to_copy += arity;
+                                        to_copy -= 1;
+                                    }
+                                    _ => to_copy -= 1,
+                                }
+                            }
+                        }
+
+                        Number(_) | Argument(_) => to_copy -= 1,
+
+                        Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
+
+                        If => to_copy += 2,
+
+                        _ => panic!("Corrupted stack"),
+                    }
+
+                    // Moves index
+                    i -= 1;
+                }
+
+                if to_copy == 0 {
+                    self.table.insert(
+                        function_name,
+                        Iterative(arity, vec![self.stack.split_off(i)]),
+                    );
+                } else {
+                    eprintln!("Incomplete function declaration");
+                }
+            }
+
             // Eliminate top of stack without computing it
             Drop => {
                 let mut to_drop = 1;
@@ -393,6 +448,72 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
     arguments.pop().unwrap()
 }
 
+fn run_function(
+    name: String,
+    arity: usize,
+    ops: &Vec<Token>,
+    arguments: Vec<ExecTree>,
+    table: &HashMap<String, Object>,
+) -> Option<Rational> {
+    // Stop for invalid input before evaluating arguments
+    if arguments.len() != arity {
+        return None;
+    }
+
+    // Start by executing every argument
+    let args: Vec<Option<Rational>> = arguments
+        .into_par_iter()
+        .map(|arg| arg.reduce(table))
+        .collect();
+
+    // Check is some arguments didn't compute
+    if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+        return None;
+    }
+
+    if ops
+        .par_iter()
+        .filter(|op| {
+            if let Argument(index) = op {
+                index >= &arity
+            } else {
+                false
+            }
+        })
+        .count()
+        > 0
+    {
+        eprintln!("Arguments exceeded arity in function: \"{}\"", name);
+        return None;
+    }
+
+    // Substitute the arguments ops stack
+    let mut dirty_ops: Vec<Token> = ops
+        .par_iter()
+        .map(|op| {
+            if let Argument(index) = op {
+                Number(args[*index].clone().unwrap())
+            } else {
+                op.clone()
+            }
+        })
+        .collect();
+
+    let ops = clip_head(&mut dirty_ops, table);
+    if ops.len() == 0 {
+        eprintln!("Invalid function: \"{}\", dropped stack", name);
+        return None;
+    }
+
+    if dirty_ops.len() != 0 {
+        eprintln!("Warning! function: \"{}\" is still executable but may contain errors!\nIts advisable to update its definition", name);
+    }
+
+    let tree = parse_tree(ops, table);
+
+    tree.reduce(table)
+}
+
 // Iterative Fibonacci for testing
 // $1 $0 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec fib|1
 //
@@ -434,71 +555,13 @@ impl ExecTree {
                 if let Some(id) = table.get(&name) {
                     match id {
                         Variable(value) => Some(value.clone()),
-                        Function(arity, ops) => {
-                            // Stop for invalid input before evaluating arguments
-                            if arguments.len() != *arity {
-                                return None;
-                            }
-
-                            // Start by executing every argument
-                            let args: Vec<Option<Rational>> = arguments
-                                .into_par_iter()
-                                .map(|arg| arg.reduce(table))
-                                .collect();
-
-                            // Check is some arguments didn't compute
-                            if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
-                                return None;
-                            }
-
-                            if ops
-                                .par_iter()
-                                .filter(|op| {
-                                    if let Argument(index) = op {
-                                        index >= arity
-                                    } else {
-                                        false
-                                    }
-                                })
-                                .count()
-                                > 0
-                            {
-                                eprintln!("Arguments exceeded arity in function: \"{}\"", name);
-                                return None;
-                            }
-
-                            // Substitute the arguments ops stack
-                            let mut dirty_ops: Vec<Token> = ops
-                                .par_iter()
-                                .map(|op| {
-                                    if let Argument(index) = op {
-                                        Number(args[*index].clone().unwrap())
-                                    } else {
-                                        op.clone()
-                                    }
-                                })
-                                .collect();
-
-                            let ops = clip_head(&mut dirty_ops, table);
-                            if ops.len() == 0 {
-                                eprintln!("Invalid function: \"{}\", dropped stack", name);
-                                return None;
-                            }
-
-                            if dirty_ops.len() != 0 {
-                                eprintln!("Warning! function: \"{}\" is still executable but may contain errors!\nIts advisable to update its definition", name);
-                            }
-
-                            let tree = parse_tree(ops, table);
-
-                            tree.reduce(table)
-                        }
+                        Function(arity, ops) => run_function(name, *arity, ops, arguments, table),
+                        _ => None,
                     }
                 } else {
                     None
                 }
             }
-
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
