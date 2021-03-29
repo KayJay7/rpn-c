@@ -14,7 +14,7 @@ cargo install rpn-c
 ## Syntax (rpn-l)
 
 rpn-l is the language used by (and developed for) rpn-c. It's not really user friendly, but it works, and will allow you to write your own scripts and functions for your quick calculation needs.
-The language is defined with fixed arity, so that you don't need parenthesis.
+Every expression (and most command) are defined with fixed arity so you don't need parenthesis. The only two exceptions (`>` and `@`), still have known arity.
 
 rpn-l statements are composed from two types of tokens: expressions, which can be composed with other expressions to for new ones; and commands, which cannot be composed but sometime requires to be preceded by an expression.
 All expression tokens get pushed on top of the stack from left to right, but are not evaluated. When (always from left to right) rpn-c encounters a command, this can cause the evaluation of the last expression pushed to the stack, or some other side effects.

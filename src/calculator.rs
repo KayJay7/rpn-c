@@ -85,7 +85,7 @@ enum Token {
 enum Object {
     Variable(Rational),
     Function(usize, Vec<Token>),
-    Iterative(usize, Vec<Vec<Token>>),
+    Iterative(usize, Vec<Vec<Token>>, Vec<Token>, Vec<Token>),
 }
 
 // Implement Display for printing
@@ -155,7 +155,7 @@ impl Calculator {
                     } else {
                         // Check table
                         match self.table.get(name) {
-                            Some(Function(arity, _)) => {
+                            Some(Function(arity, _)) | Some(Iterative(arity, _, _, _)) => {
                                 to_copy += arity;
                                 to_copy -= 1;
                             }
@@ -177,6 +177,8 @@ impl Calculator {
             index -= 1;
         }
 
+        // If it managed to complete the expression with what was
+        // found in stack, then index contains where to split
         if to_copy == 0 {
             FoundAt(index)
         } else {
@@ -277,53 +279,43 @@ impl Calculator {
             }
 
             AssignIterative(name) => {
-                let mut to_copy = 1;
-                let mut i = self.stack.len();
+                let mut index = self.stack.len();
+                let mut indices = Vec::new();
+                let mut found = true;
 
                 // Split name from arity
                 let mut parse = name.split('@');
                 let function_name = String::from(parse.next().unwrap());
                 let arity = parse.next().unwrap().parse().unwrap();
 
-                while to_copy > 0 && i > 0 {
-                    match &self.stack[i - 1] {
-                        Identifier(name) => {
-                            // Check for self reference (for recursion)
-                            if name.eq(&function_name) {
-                                to_copy += arity;
-                                to_copy -= 1;
-                            } else {
-                                // Check table
-                                match self.table.get(name) {
-                                    Some(Function(arity, _)) => {
-                                        to_copy += arity;
-                                        to_copy -= 1;
-                                    }
-                                    _ => to_copy -= 1,
-                                }
-                            }
-                        }
-
-                        Number(_) | Argument(_) => to_copy -= 1,
-
-                        Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
-
-                        If => to_copy += 2,
-
-                        _ => panic!("Corrupted stack"),
+                let mut expressions = arity + 2;
+                while expressions > 0 && found {
+                    if let FoundAt(split_index) =
+                        self.extract_function(&function_name, arity, index)
+                    {
+                        indices.push(split_index);
+                        index = split_index;
+                    } else {
+                        found = false;
+                        eprintln!("Incomplete function declaration");
                     }
-
-                    // Moves index
-                    i -= 1;
+                    expressions -= 1;
                 }
 
-                if to_copy == 0 {
+                if arity + 2 == indices.len() {
+                    let mut expressions = Vec::new();
+
+                    for index in indices {
+                        expressions.push(self.stack.split_off(index));
+                    }
+
+                    expressions.reverse();
+                    let condition = expressions.remove(arity + 1);
+                    let last = expressions.remove(arity);
                     self.table.insert(
                         function_name,
-                        Iterative(arity, vec![self.stack.split_off(i)]),
+                        Iterative(arity, expressions, last, condition),
                     );
-                } else {
-                    eprintln!("Incomplete function declaration");
                 }
             }
 
@@ -335,7 +327,7 @@ impl Calculator {
                         None => to_drop = 0,
 
                         Some(Identifier(name)) => match self.table.get(&name) {
-                            Some(Function(arity, _)) => {
+                            Some(Function(arity, _)) | Some(Iterative(arity, _, _, _)) => {
                                 to_drop += arity;
                                 to_drop -= 1;
                             }
@@ -375,7 +367,7 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
             Identifier(name) => {
                 // Check table
                 match table.get(name) {
-                    Some(Function(arity, _)) => {
+                    Some(Function(arity, _)) | Some(Iterative(arity, _, _, _)) => {
                         to_copy += arity;
                         to_copy -= 1;
                     }
@@ -419,7 +411,7 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
     for token in stack {
         match token {
             Identifier(ref name) => match table.get(name) {
-                Some(Function(arity, _)) => {
+                Some(Function(arity, _)) | Some(Iterative(arity, _, _, _)) => {
                     let len = arguments.len();
                     let args = arguments.split_off(len - arity);
                     arguments.push(ExecTree {
@@ -469,23 +461,12 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
 }
 
 fn run_function(
-    name: String,
+    name: &String,
     arity: usize,
     ops: &Vec<Token>,
-    arguments: Vec<ExecTree>,
+    args: &Vec<Option<Rational>>,
     table: &HashMap<String, Object>,
 ) -> Option<Rational> {
-    // Stop for invalid input before evaluating arguments
-    if arguments.len() != arity {
-        return None;
-    }
-
-    // Start by executing every argument
-    let args: Vec<Option<Rational>> = arguments
-        .into_par_iter()
-        .map(|arg| arg.reduce(table))
-        .collect();
-
     // Check is some arguments didn't compute
     if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
@@ -538,11 +519,14 @@ fn run_function(
     tree.reduce(table)
 }
 
-// Iterative Fibonacci for testing
-// $1 $0 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec fib|1
+// Tail recursive Fibonacci for testing
+// $1 $0 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec tfib|1
 //
 // Naive Fibonacci for testing
-// $0 1 ~ nfib $0 2 ~ +  $0 $0 1 ~ nfib|1
+// $0 1 ~ nfib $0 2 ~ nfib + $0 $0 1 ~ ? nfib|1
+//
+// Iterative Fibonacci for testing
+// $1 $0 $1 + $2 1 ~ $1 $2 fib_aux@3 1 0 $0 fib_aux fib|1
 impl ExecTree {
     // The result needs to be optional because
     // we don't know in advance if a function contains errors
@@ -579,8 +563,56 @@ impl ExecTree {
                 if let Some(id) = table.get(&name) {
                     match id {
                         Variable(value) => Some(value.clone()),
-                        Function(arity, ops) => run_function(name, *arity, ops, arguments, table),
-                        _ => None,
+                        Function(arity, ops) => {
+                            // Stop for invalid input before evaluating arguments
+                            if arguments.len() != *arity {
+                                return None;
+                            }
+
+                            // Start by executing every argument
+                            let args: Vec<Option<Rational>> = arguments
+                                .into_par_iter()
+                                .map(|arg| arg.reduce(table))
+                                .collect();
+
+                            // Run function with those arguments
+                            run_function(&name, *arity, ops, &args, table)
+                        }
+                        Iterative(arity, exps, last, cond) => {
+                            let mut stop = false;
+
+                            // Stop for invalid input before evaluating arguments
+                            if arguments.len() != *arity {
+                                return None;
+                            }
+
+                            // Start by executing every argument
+                            let mut args: Vec<Option<Rational>> = arguments
+                                .into_par_iter()
+                                .map(|arg| arg.reduce(table))
+                                .collect();
+
+                            // Iter untill cond returns a 0 (stop == true)
+                            // Don't iter if cond returns None
+                            while let (Some(value), false) =
+                                (run_function(&name, *arity, cond, &args, table), stop)
+                            {
+                                // Check for 0
+                                if value.cmp0() != std::cmp::Ordering::Equal {
+                                    // Calculate new arguments from previous
+                                    args = exps
+                                        .par_iter()
+                                        .map(|exp| run_function(&name, *arity, &exp, &args, table))
+                                        .collect();
+                                } else {
+                                    // Set flag if 0
+                                    stop = true;
+                                }
+                            }
+
+                            // Run the exit function on the last set of arguments
+                            run_function(&name, *arity, &last, &args, table)
+                        }
                     }
                 } else {
                     None
