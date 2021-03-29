@@ -4,6 +4,7 @@ use rug::Rational;
 use std::collections::HashMap;
 use std::fmt;
 use std::string::String;
+use Found::*;
 use Object::*;
 use Token::*;
 
@@ -111,6 +112,11 @@ pub struct Calculator {
     table: HashMap<String, Object>,
 }
 
+enum Found {
+    NotFound,
+    FoundAt(usize),
+}
+
 impl Calculator {
     // Empty calculator
     pub fn new() -> Calculator {
@@ -129,6 +135,53 @@ impl Calculator {
 
         // Inform the user of the number of elements still in stack
         println!("{} elements in stack", self.stack.len());
+    }
+
+    fn extract_function(
+        &mut self,
+        function_name: &String,
+        arity: usize,
+        mut index: usize,
+    ) -> Found {
+        let mut to_copy = 1;
+
+        while to_copy > 0 && index > 0 {
+            match &self.stack[index - 1] {
+                Identifier(name) => {
+                    // Check for self reference (for recursion)
+                    if name.eq(function_name) {
+                        to_copy += arity;
+                        to_copy -= 1;
+                    } else {
+                        // Check table
+                        match self.table.get(name) {
+                            Some(Function(arity, _)) => {
+                                to_copy += arity;
+                                to_copy -= 1;
+                            }
+                            _ => to_copy -= 1,
+                        }
+                    }
+                }
+
+                Number(_) | Argument(_) => to_copy -= 1,
+
+                Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
+
+                If => to_copy += 2,
+
+                _ => panic!("Corrupted stack"),
+            }
+
+            // Moves index
+            index -= 1;
+        }
+
+        if to_copy == 0 {
+            FoundAt(index)
+        } else {
+            NotFound
+        }
     }
 
     // Receive a token and decide what to do
@@ -208,49 +261,16 @@ impl Calculator {
             }
 
             AssignFunction(name) => {
-                let mut to_copy = 1;
-                let mut i = self.stack.len();
+                let index = self.stack.len();
 
                 // Split name from arity
                 let mut parse = name.split('|');
                 let function_name = String::from(parse.next().unwrap());
                 let arity = parse.next().unwrap().parse().unwrap();
 
-                while to_copy > 0 && i > 0 {
-                    match &self.stack[i - 1] {
-                        Identifier(name) => {
-                            // Check for self reference (for recursion)
-                            if name.eq(&function_name) {
-                                to_copy += arity;
-                                to_copy -= 1;
-                            } else {
-                                // Check table
-                                match self.table.get(name) {
-                                    Some(Function(arity, _)) => {
-                                        to_copy += arity;
-                                        to_copy -= 1;
-                                    }
-                                    _ => to_copy -= 1,
-                                }
-                            }
-                        }
-
-                        Number(_) | Argument(_) => to_copy -= 1,
-
-                        Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
-
-                        If => to_copy += 2,
-
-                        _ => panic!("Corrupted stack"),
-                    }
-
-                    // Moves index
-                    i -= 1;
-                }
-
-                if to_copy == 0 {
+                if let FoundAt(index) = self.extract_function(&function_name, arity, index) {
                     self.table
-                        .insert(function_name, Function(arity, self.stack.split_off(i)));
+                        .insert(function_name, Function(arity, self.stack.split_off(index)));
                 } else {
                     eprintln!("Incomplete function declaration");
                 }
@@ -471,6 +491,7 @@ fn run_function(
         return None;
     }
 
+    // Check if the arguments have to high indexes
     if ops
         .par_iter()
         .filter(|op| {
@@ -499,6 +520,7 @@ fn run_function(
         })
         .collect();
 
+    // Check if the stack is valid
     let ops = clip_head(&mut dirty_ops, table);
     if ops.len() == 0 {
         eprintln!("Invalid function: \"{}\", dropped stack", name);
@@ -509,8 +531,10 @@ fn run_function(
         eprintln!("Warning! function: \"{}\" is still executable but may contain errors!\nIts advisable to update its definition", name);
     }
 
+    // Build tree
     let tree = parse_tree(ops, table);
 
+    // Execute tree
     tree.reduce(table)
 }
 

@@ -154,7 +154,7 @@ Near future:
 * [x] Commenting
 * [ ] Some more basic operations (paused)
   * [ ] Powers
-  * [ ] Integer division
+  * [ ] Integer division (required for 0.2.0)
   * [ ] Remainder
 * [x] User defined functions
   * [x] `if-else`
@@ -164,7 +164,7 @@ Near future:
 * [ ] Solve the stack overflow issue
   * Rewrite the executor so that it doesn't use recursion
     * Would probably cause less parallelization
-  * [ ] Allow writing iterative recursive functions
+  * [ ] Allow writing iterative functions (required for 0.2.0)
 * [x] Add parallelization
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
