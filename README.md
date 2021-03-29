@@ -46,6 +46,10 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
     * Sometimes you might want to define a function, refere it from another, than change the first function
       * This enables mutual recursion between functions
       * Remember to maintain the same arity or this will break the other function
+  * `<exp0> <exp1> ... <expN-1> <expN> <expN+1> <function_name>@<arity>` declares an iterative function of `<arity>` `N`
+    * Equivalent to `<exp0> <exp1> ... <expN-1> <function_name> <expN> <expN+1> ? <function_name>|<arity>`, but better
+    * It's preferable to use iterative functions when possible, they are faster and don't cause stack overflows
+      * Most functions can usually be rewritten this way, the ones that don't are often too complex to be calculated on big inputs in the first place
   * `<exp0> =<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
   * `<exp0> =` evaluates the expression on top of the stack and prints it
   * `<exp0> #` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
@@ -138,6 +142,17 @@ $0 ... $k f                     ; Test for zero
 0 $0 ... $K-1 mu-f_rec mu-f|K   ; μ-function
 ```
 
+Alternatively:
+
+```rpn-l
+$0 1 + $1 ... $K                ; Calculate next arguments
+$0                              ; Found minimum
+$0 ... $K f                     ; Test for 0
+  mu-f_aux@K+1                  ; Auxiliary function
+
+0 $0 ... $k-1 mu-f_aux mu-f|K   ; μ-function
+```
+
 #### Conclusion
 
 Results:
@@ -164,7 +179,8 @@ Near future:
 * [ ] Solve the stack overflow issue
   * Rewrite the executor so that it doesn't use recursion
     * Would probably cause less parallelization
-  * [ ] Allow writing iterative functions (required for 0.2.0)
+  * [x] Allow writing iterative functions (required for 0.2.0)
+    * Enables writing functions that don't overflow with few thousands of iterations
 * [x] Add parallelization
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
@@ -174,6 +190,6 @@ Maybe one day:
 * [ ] Approximation of *some* irrational operations
   * [ ] Approximation of irrational constants like pi, phi, e, log_2(10)
 * [ ] Speeding up tail recursion
-  * [ ] Add some form of iteration without recursion
+  * [x] Add some form of iteration without recursion
 * [ ] Upgrading to a real LALR (that kinda defeats the whole point)
 * [ ] Programming an actual compiler
