@@ -11,6 +11,10 @@ fn main() {
         env!("CARGO_PKG_VERSION")
     );
 
+    let std_lib = String::from(include_str!("../std_lib.rpnl"));
+
+    calculator.parse(std_lib);
+
     for line in reader.lock().lines() {
         calculator.parse(line.expect("IO Error occurred while reading from stdin"));
     }

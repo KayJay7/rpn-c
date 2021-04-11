@@ -35,6 +35,9 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `<exp0> <exp1> ~` perform a positive subtraction
     * If the result is lesser than `0`, it returns `0`
     * It returns the result otherwise
+  * `<exp0> <exp1> \` perform an Euclidean (or integer) division
+    * Performs a divizion and floors the result
+    * Will always return an integer
   * `<exp0> <exp1> <exp2> ?` if-then construct
     * If `<exp2>` *not* equals `0`, drops `<exp1>` evaluates and returns `<exp0>`
     * If `<exp2>` equals `0`, drops `<exp0>` evaluates and returns `<exp1>`
@@ -170,9 +173,9 @@ Results:
 Near future:
 * [x] Commenting
 * [ ] Some more basic operations (paused)
-  * [ ] Powers
+  * [x] Powers (via standard library)
   * [x] Integer division (required for 0.2.0)
-  * [ ] Remainder
+  * [x] Remainder (via standard_library)
 * [x] User defined functions
   * [x] `if-else`
   * [x] Recursion
@@ -184,6 +187,7 @@ Near future:
   * [x] Allow writing iterative functions (required for 0.2.0)
     * Enables writing functions that don't overflow with few thousands of iterations
 * [x] Add parallelization
+* [ ] Switch to a better crate than `rug`
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
 * [ ] Output to file (silent mode)
