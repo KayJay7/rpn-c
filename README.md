@@ -11,6 +11,8 @@ Get it from crates.io using:
 cargo install rpn-c
 ```
 
+Building requires some GNU dependencies (for GMP), see the [gmp_mpfr_sys](https://docs.rs/gmp-mpfr-sys/1.4.4/gmp_mpfr_sys/index.html) (one of `rug`'s dependencies) documentation for more information on building on different systems (mainly for building on Windows).
+
 ## Syntax (rpn-l)
 
 rpn-l is the language used by (and developed for) rpn-c. It's not really user friendly, but it works, and will allow you to write your own scripts and functions for your quick calculation needs.
@@ -169,7 +171,7 @@ Near future:
 * [x] Commenting
 * [ ] Some more basic operations (paused)
   * [ ] Powers
-  * [ ] Integer division (required for 0.2.0)
+  * [x] Integer division (required for 0.2.0)
   * [ ] Remainder
 * [x] User defined functions
   * [x] `if-else`

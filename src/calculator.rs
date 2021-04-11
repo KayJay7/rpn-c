@@ -48,9 +48,9 @@ enum Token {
     #[regex("~")]
     PositiveMinus,
 
-    /*#[regex("\\\\")]
+    #[regex("\\\\")]
     IntegerDiv,
-    */
+
     #[regex("\\?")]
     If,
 
@@ -97,6 +97,7 @@ impl fmt::Display for Token {
             Minus => write!(f, "-"),
             Times => write!(f, "*"),
             Divide => write!(f, "/"),
+            IntegerDiv => write!(f, "\\"),
             If => write!(f, "?"),
             PositiveMinus => write!(f, "~"),
             Argument(index) => write!(f, "${}", index),
@@ -166,7 +167,7 @@ impl Calculator {
 
                 Number(_) | Argument(_) => to_copy -= 1,
 
-                Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
+                Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => to_copy += 1,
 
                 If => to_copy += 2,
 
@@ -337,7 +338,7 @@ impl Calculator {
                         Some(Number(_)) | Some(Argument(_)) => to_drop -= 1,
 
                         Some(Plus) | Some(Minus) | Some(Times) | Some(Divide)
-                        | Some(PositiveMinus) => to_drop += 1,
+                        | Some(PositiveMinus) | Some(IntegerDiv) => to_drop += 1,
 
                         Some(If) => to_drop += 2,
 
@@ -382,7 +383,7 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
                 i = 1;
             }
 
-            Plus | Minus | Times | Divide | PositiveMinus => to_copy += 1,
+            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => to_copy += 1,
 
             If => to_copy += 2,
 
@@ -434,7 +435,7 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
                 });
             }
 
-            Plus | Minus | Times | Divide | PositiveMinus => {
+            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => {
                 let len = arguments.len();
                 let args = arguments.split_off(len - 2);
                 arguments.push(ExecTree {
@@ -646,6 +647,7 @@ impl ExecTree {
                                 Some(Rational::from(0))
                             }
                         }
+                        IntegerDiv => Some((a / b).floor()),
 
                         // All the other tokens will never enter the tree
                         _ => panic!("Corrupted stack"),
