@@ -1,6 +1,7 @@
 use logos::Logos;
+use num_rational::BigRational;
+use num_traits::Zero;
 use rayon::prelude::*;
-use rug::Rational;
 use std::collections::HashMap;
 use std::fmt;
 use std::string::String;
@@ -31,7 +32,7 @@ enum Token {
     Argument(usize),
 
     #[regex("[\\-\\+]?[0-9]+(/[0-9]+)?", |lex| lex.slice().parse())]
-    Number(Rational),
+    Number(BigRational),
 
     #[regex("-")]
     Minus,
@@ -83,7 +84,7 @@ enum Token {
 
 #[derive(PartialEq, Clone)]
 enum Object {
-    Variable(Rational),
+    Variable(BigRational),
     Function(usize, Vec<Token>),
     Iterative(usize, Vec<Vec<Token>>, Vec<Token>, Vec<Token>),
 }
@@ -465,9 +466,9 @@ fn run_function(
     name: &String,
     arity: usize,
     ops: &Vec<Token>,
-    args: &Vec<Option<Rational>>,
+    args: &Vec<Option<BigRational>>,
     table: &HashMap<String, Object>,
-) -> Option<Rational> {
+) -> Option<BigRational> {
     // Check is some arguments didn't compute
     if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
@@ -531,7 +532,7 @@ fn run_function(
 impl ExecTree {
     // The result needs to be optional because
     // we don't know in advance if a function contains errors
-    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
+    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<BigRational> {
         // Estract token and arguments from self (so you can move them indipendently)
         let ExecTree {
             token,
@@ -544,7 +545,7 @@ impl ExecTree {
                 let condition = arguments.pop().unwrap().reduce(table);
 
                 if let Some(condition) = condition {
-                    if condition.cmp0() == std::cmp::Ordering::Equal {
+                    if condition.is_zero() {
                         // Execute the right arm
                         arguments.pop().unwrap().reduce(table)
                     } else {
@@ -571,7 +572,7 @@ impl ExecTree {
                             }
 
                             // Start by executing every argument
-                            let args: Vec<Option<Rational>> = arguments
+                            let args: Vec<Option<BigRational>> = arguments
                                 .into_par_iter()
                                 .map(|arg| arg.reduce(table))
                                 .collect();
@@ -588,7 +589,7 @@ impl ExecTree {
                             }
 
                             // Start by executing every argument
-                            let mut args: Vec<Option<Rational>> = arguments
+                            let mut args: Vec<Option<BigRational>> = arguments
                                 .into_par_iter()
                                 .map(|arg| arg.reduce(table))
                                 .collect();
@@ -599,7 +600,7 @@ impl ExecTree {
                                 (run_function(&name, *arity, cond, &args, table), stop)
                             {
                                 // Check for 0
-                                if value.cmp0() != std::cmp::Ordering::Equal {
+                                if !value.is_zero() {
                                     // Calculate new arguments from previous
                                     args = exps
                                         .par_iter()
@@ -622,7 +623,7 @@ impl ExecTree {
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
-                let mut args: Vec<Option<Rational>> = arguments
+                let mut args: Vec<Option<BigRational>> = arguments
                     .into_par_iter()
                     .map(|arg| arg.reduce(table))
                     .collect();
@@ -641,10 +642,10 @@ impl ExecTree {
                         Divide => Some(a / b),
                         PositiveMinus => {
                             let c = a - &b;
-                            if c.cmp0() != std::cmp::Ordering::Less {
+                            if c > BigRational::zero() {
                                 Some(c)
                             } else {
-                                Some(Rational::from(0))
+                                Some(BigRational::zero())
                             }
                         }
                         IntegerDiv => Some((a / b).floor()),
@@ -664,7 +665,7 @@ impl ExecTree {
 impl Calculator {
     // Compute top of stack and returns it
     // Returns None if the stack empties in advance
-    fn compute(&mut self) -> Option<Rational> {
+    fn compute(&mut self) -> Option<BigRational> {
         // Pop first expression
         let expression = clip_head(&mut self.stack, &self.table);
 
@@ -680,7 +681,7 @@ impl Calculator {
         tree.reduce(&self.table)
     }
 
-    fn compute_all(&mut self) -> Vec<Option<Rational>> {
+    fn compute_all(&mut self) -> Vec<Option<BigRational>> {
         let mut all_trees = Vec::new();
 
         let mut found_incomplete = false;
