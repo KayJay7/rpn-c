@@ -204,8 +204,14 @@ impl Calculator {
 
             // Compute and print top of the stack
             Return => {
-                if let Some(num) = self.compute() {
-                    println!("> {}", num);
+                if let Some(mut num) = self.compute() {
+                    num.normalize();
+                    let (num, den) = num.into_parts();
+                    if den.is_one() {
+                        println!("> {}", num);
+                    } else {
+                        println!("> {}/{}", num, den);
+                    }
                 } else {
                     // Print error if arguments are missing
                     eprintln!("Incomplete expression");
@@ -215,8 +221,9 @@ impl Calculator {
             // Compute and print top of the stack
             // Put result back in stack
             Partial => {
-                if let Some(num) = self.compute() {
+                if let Some(mut num) = self.compute() {
                     println!("< {}", num);
+                    num.normalize();
                     self.stack.push(Number(num));
                 } else {
                     // Print error if arguments are missing
@@ -226,8 +233,9 @@ impl Calculator {
 
             // Compute top of stack and duplicate it
             Duplicate => {
-                if let Some(num) = self.compute() {
+                if let Some(mut num) = self.compute() {
                     self.stack.push(Number(num.clone()));
+                    num.normalize();
                     self.stack.push(Number(num));
                 } else {
                     eprintln!("Incomplete expression, dropped stack");
@@ -237,8 +245,14 @@ impl Calculator {
             // Compute and print entire stack
             Flush => {
                 for result in self.compute_all() {
-                    if let Some(num) = result {
-                        println!("> {}", num);
+                    if let Some(mut num) = result {
+                        num.normalize();
+                        let (num, den) = num.into_parts();
+                        if den.is_one() {
+                            println!("> {}", num);
+                        } else {
+                            println!("> {}/{}", num, den);
+                        }
                     } else {
                         // Print error if arguments are missing
                         eprintln!("Incomplete expression");
