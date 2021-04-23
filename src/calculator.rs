@@ -1,6 +1,6 @@
 use logos::Logos;
-use num_rational::BigRational;
 use num_traits::Zero;
+use ramp::rational::Rational;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
@@ -32,7 +32,7 @@ enum Token {
     Argument(usize),
 
     #[regex("[\\-\\+]?[0-9]+(/[0-9]+)?", |lex| lex.slice().parse())]
-    Number(BigRational),
+    Number(Rational),
 
     #[regex("-")]
     Minus,
@@ -84,7 +84,7 @@ enum Token {
 
 #[derive(PartialEq, Clone)]
 enum Object {
-    Variable(BigRational),
+    Variable(Rational),
     Function(usize, Vec<Token>),
     Iterative(usize, Vec<Vec<Token>>, Vec<Token>, Vec<Token>),
 }
@@ -466,9 +466,9 @@ fn run_function(
     name: &String,
     arity: usize,
     ops: &Vec<Token>,
-    args: &Vec<Option<BigRational>>,
+    args: &Vec<Option<Rational>>,
     table: &HashMap<String, Object>,
-) -> Option<BigRational> {
+) -> Option<Rational> {
     // Check is some arguments didn't compute
     if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
@@ -532,7 +532,7 @@ fn run_function(
 impl ExecTree {
     // The result needs to be optional because
     // we don't know in advance if a function contains errors
-    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<BigRational> {
+    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
         // Estract token and arguments from self (so you can move them indipendently)
         let ExecTree {
             token,
@@ -572,7 +572,7 @@ impl ExecTree {
                             }
 
                             // Start by executing every argument
-                            let args: Vec<Option<BigRational>> = arguments
+                            let args: Vec<Option<Rational>> = arguments
                                 .into_par_iter()
                                 .map(|arg| arg.reduce(table))
                                 .collect();
@@ -589,7 +589,7 @@ impl ExecTree {
                             }
 
                             // Start by executing every argument
-                            let mut args: Vec<Option<BigRational>> = arguments
+                            let mut args: Vec<Option<Rational>> = arguments
                                 .into_par_iter()
                                 .map(|arg| arg.reduce(table))
                                 .collect();
@@ -623,7 +623,7 @@ impl ExecTree {
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
-                let mut args: Vec<Option<BigRational>> = arguments
+                let mut args: Vec<Option<Rational>> = arguments
                     .into_par_iter()
                     .map(|arg| arg.reduce(table))
                     .collect();
@@ -642,13 +642,16 @@ impl ExecTree {
                         Divide => Some(a / b),
                         PositiveMinus => {
                             let c = a - &b;
-                            if c > BigRational::zero() {
+                            if c > Rational::zero() {
                                 Some(c)
                             } else {
-                                Some(BigRational::zero())
+                                Some(Rational::zero())
                             }
                         }
-                        IntegerDiv => Some((a / b).floor()),
+                        IntegerDiv => {
+                            let (num, den) = (a / b).into_parts();
+                            Some(Rational::from(num / den))
+                        }
 
                         // All the other tokens will never enter the tree
                         _ => panic!("Corrupted stack"),
@@ -665,7 +668,7 @@ impl ExecTree {
 impl Calculator {
     // Compute top of stack and returns it
     // Returns None if the stack empties in advance
-    fn compute(&mut self) -> Option<BigRational> {
+    fn compute(&mut self) -> Option<Rational> {
         // Pop first expression
         let expression = clip_head(&mut self.stack, &self.table);
 
@@ -681,7 +684,7 @@ impl Calculator {
         tree.reduce(&self.table)
     }
 
-    fn compute_all(&mut self) -> Vec<Option<BigRational>> {
+    fn compute_all(&mut self) -> Vec<Option<Rational>> {
         let mut all_trees = Vec::new();
 
         let mut found_incomplete = false;
