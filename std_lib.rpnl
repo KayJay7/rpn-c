@@ -9,10 +9,9 @@ $1 $0 $1 + $2 1 ~ $1 $2 fib_aux@3
 1 0 $0 fib_aux fib|1
 
 ; modulo
-$0 
-$0 $1 \ $1 *
-    - mod|2
+$0 1 $1 _ mod|2
 
+; deprecated (replaced by '^')
 ; power/exponentiation
 $0 $0 *
 $1 2 \
@@ -22,6 +21,7 @@ $2 $0 * $2 $1 2 mod ?
     exp_aux@3
 $0 $1 floor abs 1 exp_aux exp|2
 
+; deprecated (replaced by '_')
 ; exponentiation modulo (fast exponentiation algorithm, temporarily not working)
 $0 $0 *
 $1 2 \

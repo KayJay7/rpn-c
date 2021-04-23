@@ -1,5 +1,5 @@
 use logos::Logos;
-use num_traits::Zero;
+use num_traits::{One, Zero};
 use ramp::rational::Rational;
 use rayon::prelude::*;
 use std::collections::HashMap;
@@ -52,6 +52,12 @@ enum Token {
     #[regex("\\\\")]
     IntegerDiv,
 
+    #[regex("\\^")]
+    Exp,
+
+    #[regex("_")]
+    ExpMod,
+
     #[regex("\\?")]
     If,
 
@@ -101,6 +107,8 @@ impl fmt::Display for Token {
             IntegerDiv => write!(f, "\\"),
             If => write!(f, "?"),
             PositiveMinus => write!(f, "~"),
+            Exp => write!(f, "^"),
+            ExpMod => write!(f, "_"),
             Argument(index) => write!(f, "${}", index),
             Identifier(name) => write!(f, "{}", name),
             _ => write!(f, "Unprintable"),
@@ -168,9 +176,9 @@ impl Calculator {
 
                 Number(_) | Argument(_) => to_copy -= 1,
 
-                Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => to_copy += 1,
+                Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv | Exp => to_copy += 1,
 
-                If => to_copy += 2,
+                If | ExpMod => to_copy += 2,
 
                 _ => panic!("Corrupted stack"),
             }
@@ -339,9 +347,9 @@ impl Calculator {
                         Some(Number(_)) | Some(Argument(_)) => to_drop -= 1,
 
                         Some(Plus) | Some(Minus) | Some(Times) | Some(Divide)
-                        | Some(PositiveMinus) | Some(IntegerDiv) => to_drop += 1,
+                        | Some(PositiveMinus) | Some(IntegerDiv) | Some(Exp) => to_drop += 1,
 
-                        Some(If) => to_drop += 2,
+                        Some(If) | Some(ExpMod) => to_drop += 2,
 
                         _ => panic!("Corrupted stack"),
                     }
@@ -384,9 +392,9 @@ fn clip_head(stack: &mut Vec<Token>, table: &HashMap<String, Object>) -> Vec<Tok
                 i = 1;
             }
 
-            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => to_copy += 1,
+            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv | Exp => to_copy += 1,
 
-            If => to_copy += 2,
+            If | ExpMod => to_copy += 2,
 
             _ => panic!("Corrupted stack"),
         }
@@ -436,7 +444,7 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
                 });
             }
 
-            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv => {
+            Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv | Exp => {
                 let len = arguments.len();
                 let args = arguments.split_off(len - 2);
                 arguments.push(ExecTree {
@@ -445,7 +453,7 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
                 });
             }
 
-            If => {
+            If | ExpMod => {
                 let len = arguments.len();
                 let args = arguments.split_off(len - 3);
                 arguments.push(ExecTree {
@@ -620,6 +628,31 @@ impl ExecTree {
                     None
                 }
             }
+
+            ExpMod => {
+                let mut args: Vec<Option<Rational>> = arguments
+                    .into_par_iter()
+                    .map(|arg| arg.reduce(table))
+                    .collect();
+
+                // Move args out of array (you can't add borrows)
+                let c = args.pop();
+                let b = args.pop();
+                let a = args.pop();
+                if let (Some(Some(a)), Some(Some(b)), Some(Some(c))) = (a, b, c) {
+                    let (num, den) = a.into_parts();
+                    let a = num / den;
+                    let (num, den) = b.into_parts();
+                    let b = (num / den).abs();
+                    let (num, den) = c.into_parts();
+                    let c = (num / den).abs();
+
+                    Some(Rational::from(a.pow_mod(&b, &c)))
+                } else {
+                    None
+                }
+            }
+
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
@@ -651,6 +684,22 @@ impl ExecTree {
                         IntegerDiv => {
                             let (num, den) = (a / b).into_parts();
                             Some(Rational::from(num / den))
+                        }
+                        Exp => {
+                            let mut a = a;
+                            let (num, den) = b.into_parts();
+                            let mut b = (num / den).abs();
+                            let mut result = Rational::one();
+                            while !b.is_zero() {
+                                if !b.is_even() {
+                                    result *= &a;
+                                }
+                                b /= 2;
+                                // Unfortunately we have to clone
+                                // the size of a would double anyway
+                                a *= a.clone();
+                            }
+                            Some(result)
                         }
 
                         // All the other tokens will never enter the tree
