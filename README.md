@@ -1,17 +1,17 @@
 # Reverse Polish Notation Calculator
 
 A simple program that alows you to type in math expressions (even on multiple lines) in RPN and evaluate them.
-The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [GMP](https://gmplib.org/) library (through [rug](https://gitlab.com/tspiteri/rug)), so your calculations will be limited by just your memory (and rational numbers).
-rpn-c is also parallelized using [rayon](https://github.com/rayon-rs/rayon), so you can evaluate multiple expressions at the same time.
+The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [RAMP](https://github.com/Aatch/ramp) library, so your calculations will be limited by just your memory (and rational numbers).
+`rpn-c` is also parallelized using [rayon](https://github.com/rayon-rs/rayon), so you can evaluate multiple expressions at the same time.
 
-This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine. At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
+This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine (used only up to version 0.1.1). At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
 
-Get it from crates.io using:
+Get it from [crates.io](https://crates.io/crates/rpn-c) with:
 ```sh
 cargo install rpn-c
 ```
 
-Building requires some GNU dependencies (for GMP), see the [gmp_mpfr_sys](https://docs.rs/gmp-mpfr-sys/1.4.4/gmp_mpfr_sys/index.html) (one of `rug`'s dependencies) documentation for more information on building on different systems (mainly for building on Windows).
+NOTE: Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
 
 ## Syntax (rpn-l)
 
@@ -38,6 +38,10 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `<exp0> <exp1> \` perform an Euclidean (or integer) division
     * Performs a divizion and floors the result
     * Will always return an integer
+  * `<exp0> <exp1> ^` perform an exponentiation
+    * To remain in rational numbers, the floored absolute value of `<exp1>` is used as exponent
+  * `<exp0> <exp1> <exp2> _` performs an exponentiation in modulo `<exp2>`
+    * To remain in rational numbers, the floored absolute values of `<exp1>` and `<exp2>` are used
   * `<exp0> <exp1> <exp2> ?` if-then construct
     * If `<exp2>` *not* equals `0`, drops `<exp1>` evaluates and returns `<exp0>`
     * If `<exp2>` equals `0`, drops `<exp0>` evaluates and returns `<exp1>`
@@ -167,15 +171,23 @@ Results:
   * Every rpn-l function is also Turing-Computable
 * From the above statements follows that rpn-l is Turing-Equivalent
 
+## Why `RAMP` and not `GMP`?
+
+Up until version 0.1.4, `rpn-c` was based on `GMP` using the `rug` crate as a safe interface over the C++ library. GMP *did* grant better performance on some situations, probably in general (due to its well-known maturity).
+But RAMP provides comparable performances to GMP (at least in Linux x86_64, where it performs better), plus it is more ergonomic and (most important) does not require a GNU environment to build.
+
+Switching back to GMP will be considered in the future, if performance becomes an issue. In that case, prebuild executables for Windows will be provided as releases on GitHub. Untill then, RAMP will be the library of choice for this project.
+
+For your Rust project, if you don't mind needing a GNU environment to build, and the rug's ergonomics is not an issue, that is probably the best choice, due to it's indiscuted better preformance.
 
 ## Future developement
 
 Near future:
 * [x] Commenting
 * [ ] Some more basic operations (paused)
-  * [x] Powers (via standard library)
+  * [x] Powers
   * [x] Integer division (required for 0.2.0)
-  * [x] Remainder (via standard_library)
+  * [x] Remainder
 * [x] User defined functions
   * [x] `if-else`
   * [x] Recursion
@@ -187,9 +199,10 @@ Near future:
   * [x] Allow writing iterative functions (required for 0.2.0)
     * Enables writing functions that don't overflow with few thousands of iterations
 * [x] Add parallelization
-* [ ] Switch to a better crate than `rug`
+* [x] Switch to a non GMP-dependent crate
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
+  * [ ] Support for shebang
 * [ ] Output to file (silent mode)
 
 Maybe one day:

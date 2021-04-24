@@ -654,6 +654,7 @@ impl ExecTree {
                 let b = args.pop();
                 let a = args.pop();
                 if let (Some(Some(a)), Some(Some(b)), Some(Some(c))) = (a, b, c) {
+                    // Flooring and converting to Int
                     let (num, den) = a.into_parts();
                     let a = num / den;
                     let (num, den) = b.into_parts();
@@ -700,6 +701,7 @@ impl ExecTree {
                             Some(Rational::from(num / den))
                         }
                         Exp => {
+                            //Flooring and converting to Int
                             let mut a = a;
                             let (num, den) = b.into_parts();
                             let mut b = (num / den).abs();

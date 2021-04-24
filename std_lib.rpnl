@@ -11,6 +11,13 @@ $1 $0 $1 + $2 1 ~ $1 $2 fib_aux@3
 ; modulo
 $0 1 $1 _ mod|2
 
+; phi approximation using fibonacci numbers
+; the argument specifies the number of iterations
+$1 $0 $1 + $2 1 ~ $1 $0 / $2 phi_aux@3
+1 1 $0 phi_aux phi|1
+
+; //////////
+
 ; deprecated (replaced by '^')
 ; power/exponentiation
 $0 $0 *
