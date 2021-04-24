@@ -6,7 +6,7 @@ authors = ["alvise <alvisebruniera@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/KayJay7/rpn-c"
-keywords = ["rpn", "calculator", "environment", "multiple-precision"]
+keywords = ["rpn", "calculator", "math", "multiple-precision", "interpreter"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
