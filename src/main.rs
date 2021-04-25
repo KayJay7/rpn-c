@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod calculator;
+mod input;
 use crate::calculator::Calculator;
-use std::io::{stdin, BufRead};
+use crate::input::new_editor;
+use rustyline::error::ReadlineError;
 
 fn main() {
-    let reader = stdin();
     let mut calculator = Calculator::new();
+    let mut rl = new_editor();
 
     println!(
         "Welcome to rpn-c {}\n press Ctrl-D to quit...",
@@ -29,7 +31,29 @@ fn main() {
 
     calculator.parse(std_lib);
 
-    for line in reader.lock().lines() {
-        calculator.parse(line.expect("IO Error occurred while reading from stdin"));
+    /*loop {
+        calculator.parse(
+            rl.readline("λ> ")
+                .expect("IO Error occurred while reading from stdin"),
+        );
+    }*/
+    loop {
+        let readline = rl.readline("λ> ");
+        match readline {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str());
+                calculator.parse(line);
+            }
+            Err(ReadlineError::Interrupted) => {
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                break;
+            }
+            Err(err) => {
+                println!("Error: {:?}", err);
+                break;
+            }
+        }
     }
 }
