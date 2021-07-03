@@ -16,6 +16,33 @@ $0 1 $1 _ mod|2
 $1 $0 $1 + $2 1 ~ $1 $0 / $2 phi_aux@3
 1 1 $0 phi_aux phi|1
 
+; factorial
+$0 $1 * $1 1 ~ $0 $1 fact_aux@2
+1 $0 fact_aux fact|1
+
+; binomial coefficient
+$0 $1 $2 / * $1 1 - $2 1 ~ $0 $2 bin_aux@3
+1 $0 $1 bin_aux bin|2
+
+; gsum
+; sum of the first $0 integers using Gauss' formula
+$0 $0 1 + * 2 / gsum|1
+
+; sift
+; sum of the integer from $0 to $1, both included
+; (generalization of gauss' sum)
+$1 gsum $0 1 - gsum - sift|2
+
+; Ackermann function
+; this is very slow and memory demanding
+; for high enough values it will cause a stack overflow
+    $0 1 ~ 
+$0 $1 1 ~ ack
+1
+    $1 ?
+    $1 1 +
+        $0 ack@2
+
 ; //////////
 
 ; deprecated (replaced by '^')

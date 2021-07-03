@@ -73,6 +73,21 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `%` drops the entire stack
   * `;<some_comment>` comments the rest of the line
 
+### std_lib
+
+`rpn-c` includes a standard library that gets automatically loaded, this library contains several common math operation, mostly for natural numbers.
+
+* `n floor` rounds `n` to the biggest integer lesser or equal than `n`
+* `n abs` calculates the absolute value of `n`
+* `n fib` calculates the `n`-th Fibonacci number
+* `n m mod` calculates the remainder of `n/m`
+* `n phi` approximates phi using Fibonacci numbers, the bigger `n` the more accurate the result
+* `n fact` calculates `n!`
+* `n k bin` calculates the binomial coefficient `n` over `k`
+* `n gsum` calculates the sum of the first `n` integers
+* `a b sift` calculates the sum of all the integer between a and b (included)
+* `n m ack` calculates the Ackermann function of `n` and `m`; most likely, it won't succed in an useful amount of time
+
 ## Completeness
 
 From version 0.1.1, rpn-l is Turing-Complete, so *theoretically* it can compute anything computable, but there'sstill work to do. The language still needs more features to ease the users work.
