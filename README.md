@@ -11,7 +11,10 @@ Get it from [crates.io](https://crates.io/crates/rpn-c) with:
 cargo install rpn-c
 ```
 
-NOTE: Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
+#### Notes on building
+
+Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
+Also, this crate assumes that you are compiling for your local machine, and uses the flag `target-cpu=native` to get better performance by automatically enabling cpu-dependent features, like vectorization. This doesn't allow crosscompilation, if you want to crosscompile for a different architecture, you must select a different target cpu. Please notice that crosscompilation has not been tested.
 
 ## Syntax (rpn-l)
 
