@@ -43,6 +43,44 @@ $0 $1 1 ~ ack
     $1 1 +
         $0 ack@2
 
+; "Hello, World!"
+2645608968345021733469237830984 =hello
+
+; '\n'
+10 =lf
+
+; '\r'
+13 =cr
+
+; characters 'a', 'A' and '0'
+97 =chara
+65 =charA
+48 =char0
+
+; cons
+; put the character $0 in front of the string $1
+$1 256 * $0 + cons|2
+
+; cat
+; concatenates string $0 with string $1
+; can be improved with a more efficient find_end
+$0 $1 256 * $1 $0 $1 ~ find_end@2
+$1 $0 1 find_end * $0 + cat|2
+
+; WIP for faster find_end
+;$0 $1 $1 * $2 2 * $2 $0 $1 ~ overshoot@3
+;find_between@3
+;$1 $0 $0 2 \ find_between find_end_aux|2
+;$0 256 1 overshoot $0 find_end|1
+
+; reverse
+; reverses a string
+$0 256 \ $0 256 mod $1 cons $1 $0 reverse_aux@2
+$0 0 reverse_aux reverse|1
+
+
+
+
 ; //////////
 
 ; deprecated (replaced by '^')

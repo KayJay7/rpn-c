@@ -11,6 +11,16 @@ Get it from [crates.io](https://crates.io/crates/rpn-c) with:
 cargo install rpn-c
 ```
 
+#### Hello, World!
+
+```rpn-l
+; "Hello, World!" -> "!dlroW ,olleH" reverse the string
+; "!dlorW ,olleH" -> "21 64 6c 72 6f 57 20 2c 6f 6c 6c 65 48" convert each character into a byte
+; "21 64 6c 72 6f 57 20 2c 6f 6c 6c 65 48" -> "2645608968345021733469237830984" convert it single integer
+; use '&' to print
+2645608968345021733469237830984 &
+```
+
 #### Notes on building
 
 Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
@@ -68,6 +78,9 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `:` prints the current stack
   * `>` evaluates and prints all the expressions on the stack (starting from top)
   * `<exp0> <` evaluates and duplicate the expression on top of the stack
+  * `<exp0> &` evaluates `<exp0>` and prints it as a string
+    * Reads the numerator per byte, from the least significant, and writes them to stdout
+    * If the denominator is not 1, prints it on a new line
   * `<exp0> !` drops the expression on top of the stack
     * Drops the entire expression, not just the last token
   * `%` drops the entire stack
@@ -77,16 +90,26 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
 
 `rpn-c` includes a standard library that gets automatically loaded, this library contains several common math operation, mostly for natural numbers.
 
-* `n floor` rounds `n` to the biggest integer lesser or equal than `n`
-* `n abs` calculates the absolute value of `n`
-* `n fib` calculates the `n`-th Fibonacci number
-* `n m mod` calculates the remainder of `n/m`
-* `n phi` approximates phi using Fibonacci numbers, the bigger `n` the more accurate the result
-* `n fact` calculates `n!`
-* `n k bin` calculates the binomial coefficient `n` over `k`
-* `n gsum` calculates the sum of the first `n` integers
-* `a b sift` calculates the sum of all the integer between a and b (included)
-* `n m ack` calculates the Ackermann function of `n` and `m`; most likely, it won't succed in an useful amount of time
+* Functions
+  * `n floor` rounds `n` to the biggest integer lesser or equal than `n`
+  * `n abs` calculates the absolute value of `n`
+  * `n fib` calculates the `n`-th Fibonacci number
+  * `n m mod` calculates the remainder of `n/m`
+  * `n phi` approximates phi using Fibonacci numbers, the bigger `n` the more accurate the result
+  * `n fact` calculates `n!`
+  * `n k bin` calculates the binomial coefficient `n` over `k`
+  * `n gsum` calculates the sum of the first `n` integers
+  * `a b sift` calculates the sum of all the integer between a and b (included)
+  * `n m ack` calculates the Ackermann function of `n` and `m`; most likely, it won't succed in an useful amount of time
+  * `c s cons` puts the character `c` before the string `s`
+  * `s1 s2 cat` concatenates string `s1` with string `s2`
+  * `s reverse` reverses string `s`
+* Variables
+  * `lf` line feed
+  * `cr` carriage return
+  * `chara` character `'a'`
+  * `charA` character `'A'`
+  * `char0` character `'0'`
 
 ## Completeness
 

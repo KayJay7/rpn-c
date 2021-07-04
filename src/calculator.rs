@@ -1,9 +1,11 @@
 use logos::Logos;
 use num_traits::{One, Zero};
+use ramp::int::Int;
 use ramp::rational::Rational;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
+use std::io::Write;
 use std::string::String;
 use Found::*;
 use Object::*;
@@ -82,10 +84,37 @@ enum Token {
     #[regex("%")]
     Empty,
 
+    #[regex("&")]
+    Format,
+
     #[error]
     #[regex(";.*", logos::skip)]
     #[regex(r"[ \t\n\f]+", logos::skip)]
     Error,
+}
+
+struct Stringer {
+    num: Int,
+}
+
+impl Stringer {
+    fn from(num: Int) -> Stringer {
+        Stringer { num: num.abs() }
+    }
+}
+
+impl Iterator for Stringer {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.num.is_zero() {
+            None
+        } else {
+            let (q, r) = self.num.divmod(&Int::from(256));
+            self.num = q;
+            Some(u8::from(&r))
+        }
+    }
 }
 
 #[derive(PartialEq, Clone)]
@@ -211,6 +240,40 @@ impl Calculator {
                         println!("> {}", num);
                     } else {
                         println!("> {}/{}", num, den);
+                    }
+                } else {
+                    // Print error if arguments are missing
+                    eprintln!("Incomplete expression");
+                }
+            }
+
+            // 10334410032597741434076685640 = "!dlroW olleH"
+            // Computes the top of the stack and prints it as a string
+            Format => {
+                if let Some(mut num) = self.compute() {
+                    num.normalize();
+                    let (num, den) = num.into_parts();
+                    // Turns the numerator into a vector of bytes and writes them to stdout
+                    // In case of error it just prints a message
+                    // The resulting string will be inverted, this makes it easier to build it
+                    std::io::stdout()
+                        .write(&(Stringer::from(num).collect::<Vec<u8>>())[..])
+                        .unwrap_or_else(|_| {
+                            eprintln!("Cannot print numerator string");
+                            0
+                        });
+                    println!("");
+
+                    // If the denominator is not one it does the same, on a new line
+                    // Be carefull with non-coprimes, because they get normalized
+                    if !den.is_one() {
+                        std::io::stdout()
+                            .write(&(Stringer::from(den).collect::<Vec<u8>>())[..])
+                            .unwrap_or_else(|_| {
+                                eprintln!("Cannot print numerator string");
+                                0
+                            });
+                        println!("");
                     }
                 } else {
                     // Print error if arguments are missing
