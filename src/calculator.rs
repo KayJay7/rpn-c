@@ -96,13 +96,26 @@ enum Token {
     Error,
 }
 
+// Byte iterator for string printing
+// with "buffering" to allow better unrolling
+// Might cause an excess of up to 7 trailing zeroes
 struct Stringer {
     num: Int,
+    partial: u64,
+    iter: usize,
 }
 
 impl Stringer {
+    // Constructor, consumes the provided Int
     fn from(num: Int) -> Stringer {
-        Stringer { num: num.abs() }
+        Stringer {
+            num: num.abs(),
+            partial: 0,
+            // We could do withoud iter, and reduce the number of (possibly useless) 0-writes
+            // but having it makes the loop more predictable
+            // plus, those 0-writes might not be actually useless
+            iter: 8,
+        }
     }
 }
 
@@ -110,13 +123,27 @@ impl Iterator for Stringer {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.num.is_zero() {
-            None
-        } else {
-            let (q, r) = self.num.divmod(&Int::from(256));
+        // If all 8 bufferized bytes have been printed
+        // extract new ones
+        if self.iter == 8 {
+            // Returns None if there are no more bytes to extract
+            if self.num.is_zero() {
+                return None;
+            }
+
+            // Otherwise extract 8 more using integer divisions and modulo
+            let (q, r) = self.num.divmod(&Int::from(0x1_00_00_00_00_00_00_00_00u128));
+            // Populate buffer with extracted bytes
             self.num = q;
-            Some(u8::from(&r))
+            self.partial = u64::from(&r);
+            self.iter = 0;
         }
+
+        // Extract one byte from buffer, increase counter, and returns
+        let shift = self.iter * 8;
+        let byte = ((self.partial >> shift) & 255) as u8;
+        self.iter += 1;
+        Some(byte)
     }
 }
 
@@ -250,6 +277,7 @@ impl Calculator {
                 }
             }
 
+            // 2645608968345021733469237830984 hello world for debugging
             // Computes the top of the stack and prints it as a string
             Format => {
                 if let Some(mut num) = self.compute() {
@@ -266,7 +294,7 @@ impl Calculator {
                         });
                     println!("");
 
-                    // If the denominator is not one it does the same, on a new line
+                    // If the denominator is *not* one it does the same, on a new line
                     // Be carefull with non-coprimes, because they get normalized
                     if !den.is_one() {
                         std::io::stdout()
