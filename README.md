@@ -19,6 +19,9 @@ cargo install rpn-c
 ; "0x21646c726f57202c6f6c6c6548" -> "2645608968345021733469237830984" convert it single integer
 ; use '&' to print
 2645608968345021733469237830984 &
+
+; or, with the new sintax
+"Hello, World!" &
 ```
 
 #### Notes on building
@@ -42,6 +45,13 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
     * The sign is optional
     * The denominator is optional (you can't leave a pending `/` without denominator)
+  * `"<some_string"` identifies a string and converts it into an integer
+    * `\n` escape sequence for line feed
+    * `\r` escape sequence for carriage return
+    * `\t` escape sequence for tab
+    * `\\` escape sequence for backslash
+    * `\"` escape sequence for double quotes
+    * `\<hex>` escape sequence for an arbitrary byte (must be two hexadecimal digits)
   * `<variable_name>` identifies a variable
   * `<exp0> <exp1> (+|-|*|/)` performs an arithmetic binary operation
     * Operations have fixed arity so parenthesis are not needed
@@ -108,6 +118,7 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `s1 s2 cat` concatenates string `s1` with string `s2`
   * `s reverse` reverses string `s`
   * `x to_string` converts *positive* integer `x` into a string
+  * `s str_len` finds length of `s`
 * Variables
   * `lf` line feed
   * `cr` carriage return

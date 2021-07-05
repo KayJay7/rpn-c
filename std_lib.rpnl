@@ -70,6 +70,10 @@ $1 256 * $0 + cons|2
 $0 $1 256 * $1 $0 $1 ~ find_end@2
 $1 $0 1 find_end * $0 + cat|2
 
+; str_len
+$0 $1 256 * $2 1 + $2 $0 $1 ~ str_len_aux@3
+$0 1 0 str_len_aux str_len|1
+
 ; WIP for faster find_end
 ;$0 $1 $1 * $2 2 * $2 $0 $1 ~ overshoot@3
 ;find_between@3
