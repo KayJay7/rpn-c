@@ -87,6 +87,9 @@ enum Token {
     #[regex("&")]
     Format,
 
+    #[regex("\\[\\]")]
+    Approx,
+
     #[error]
     #[regex(";.*", logos::skip)]
     #[regex(r"[ \t\n\f]+", logos::skip)]
@@ -247,7 +250,6 @@ impl Calculator {
                 }
             }
 
-            // 10334410032597741434076685640 = "!dlroW olleH"
             // Computes the top of the stack and prints it as a string
             Format => {
                 if let Some(mut num) = self.compute() {
@@ -277,6 +279,15 @@ impl Calculator {
                     }
                 } else {
                     // Print error if arguments are missing
+                    eprintln!("Incomplete expression");
+                }
+            }
+
+            // Computes the top of the stack and prints an approximation
+            Approx => {
+                if let Some(num) = self.compute() {
+                    println!("> {}", num.to_f64());
+                } else {
                     eprintln!("Incomplete expression");
                 }
             }

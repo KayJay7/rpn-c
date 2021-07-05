@@ -57,6 +57,9 @@ $0 $1 1 ~ ack
 65 =charA
 48 =char0
 
+; empty string
+0 =null
+
 ; cons
 ; put the character $0 in front of the string $1
 $1 256 * $0 + cons|2
@@ -78,6 +81,10 @@ $1 $0 1 find_end * $0 + cat|2
 $0 256 \ $0 256 mod $1 cons $1 $0 reverse_aux@2
 $0 0 reverse_aux reverse|1
 
+; to_string
+; doesn't work with non positive integers (non naturals)
+$0 10 \ $0 10 mod char0 + $1 cons $1 $0 to_string_aux@2
+$0 0 to_string_aux to_string|1
 
 
 

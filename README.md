@@ -16,7 +16,7 @@ cargo install rpn-c
 ```rpn-l
 ; "Hello, World!" -> "!dlroW ,olleH" reverse the string
 ; "!dlorW ,olleH" -> "21 64 6c 72 6f 57 20 2c 6f 6c 6c 65 48" convert each character into a byte
-; "21 64 6c 72 6f 57 20 2c 6f 6c 6c 65 48" -> "2645608968345021733469237830984" convert it single integer
+; "0x21646c726f57202c6f6c6c6548" -> "2645608968345021733469237830984" convert it single integer
 ; use '&' to print
 2645608968345021733469237830984 &
 ```
@@ -81,6 +81,9 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `<exp0> &` evaluates `<exp0>` and prints it as a string
     * Reads the numerator per byte, from the least significant, and writes them to stdout
     * If the denominator is not 1, prints it on a new line
+  * `<exp0> []` evaluates `<exp0>` and prints an approximation
+    * The approximation is calculated converting the number to a double precision floating point number
+    * `RAMP` uses a naive approach for this conversion, so the approximation might be inaccurate
   * `<exp0> !` drops the expression on top of the stack
     * Drops the entire expression, not just the last token
   * `%` drops the entire stack
@@ -104,12 +107,15 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `c s cons` puts the character `c` before the string `s`
   * `s1 s2 cat` concatenates string `s1` with string `s2`
   * `s reverse` reverses string `s`
+  * `x to_string` converts *positive* integer `x` into a string
 * Variables
   * `lf` line feed
   * `cr` carriage return
   * `chara` character `'a'`
   * `charA` character `'A'`
   * `char0` character `'0'`
+  * `hello` string `"Hello, World!"`
+  * `null` empty string (0)
 
 ## Completeness
 
