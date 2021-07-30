@@ -82,8 +82,17 @@ $0 1 0 str_len_aux str_len|1
 
 ; reverse
 ; reverses a string
-$0 256 \ $0 256 mod $1 cons $1 $0 reverse_aux@2
-$0 0 reverse_aux reverse|1
+; this reverses a string byte by byte, it's very slow
+$0 256 \ $0 256 mod $1 cons $1 $0 reverse_slow@2
+; this reverses $2 bytes
+$0 256 \ $0 256 mod $1 cons $2 1 - $1 $2 reverse_chunk@3
+; this reverses a string in chunks of 16 bytes, it's faster
+$0 340282366920938463463374607431768211456 \ 
+$0 340282366920938463463374607431768211456 mod 
+$1 0 16 reverse_chunk $2 340282366920938463463374607431768211456 * +
+$1 0 reverse_slow $2 cat
+$0 reverse_aux@3
+$0 340282366920938463463374607431768211456 \ $0 340282366920938463463374607431768211456 mod 0 reverse_aux reverse|1
 
 ; to_string
 ; doesn't work with non positive integers (non naturals)
@@ -114,3 +123,5 @@ $3
     $1
     mod_exp_aux@4
 $0 $1 floor abs 1 $2 mod_exp_aux mod_exp|3
+
+"Lorem ipsum dolor sit amet, consectetur adipiscing elit. In a dui id sapien pretium facilisis et id turpis. Suspendisse diam lacus, bibendum a mattis sed, facilisis sed leo. Pellentesque lobortis dui non tellus scelerisque, sed venenatis dolor luctus. Ut at fringilla tortor, in fringilla lacus. In at justo eu nulla tempus facilisis eu sit amet lectus. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec id consequat lectus. Integer elit felis, rutrum et pellentesque ut, bibendum a ligula. Phasellus sit amet hendrerit quam.\n\nVivamus diam turpis, imperdiet eu varius et, semper sit amet orci. Vestibulum porttitor eleifend turpis, vel aliquam sapien maximus vitae. Cras in risus maximus, pretium ligula vitae, eleifend purus. Sed enim neque, lacinia viverra erat quis, congue tristique nibh. Integer pulvinar, sapien eget bibendum ornare, mauris erat sollicitudin quam, eu aliquet turpis nibh quis augue. Suspendisse non sodales nunc, non consectetur ex. Fusce luctus pellentesque massa at cursus. Fusce et tempor lectus, sit amet blandit ex. Fusce laoreet accumsan dui nec auctor. In id urna eleifend, pellentesque orci pulvinar, ultrices nisl.\n\nVivamus convallis lectus ligula, vel convallis odio faucibus vitae. Cras et ipsum a purus interdum tempus ut eu velit. Aliquam posuere pellentesque elit et varius. Nulla mollis varius augue, eu lacinia quam sagittis eu. Mauris molestie turpis quis felis molestie pharetra. Nunc fringilla accumsan eros vel ornare. Nunc vel nibh eget nisi iaculis dictum. Ut placerat eget libero et mattis. Vivamus rhoncus malesuada felis at vestibulum. Aenean dapibus accumsan tellus, ac facilisis lacus luctus vitae. Donec arcu turpis, lobortis vel suscipit a, tincidunt et sem.\n\nUt gravida elit tristique blandit finibus. Vestibulum interdum enim ut dapibus suscipit. Donec at libero erat. Quisque a venenatis lectus, non volutpat justo. Proin in sem feugiat, faucibus dui id, molestie lorem. Cras et suscipit sem. Donec metus nisi, lobortis quis leo sit eget." =lipsum

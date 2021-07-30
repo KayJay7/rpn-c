@@ -94,6 +94,7 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `<exp0> []` evaluates `<exp0>` and prints an approximation
     * The approximation is calculated converting the number to a double precision floating point number
     * `RAMP` uses a naive approach for this conversion, so the approximation might be inaccurate
+    * Converting the algorithm used by GMP will be considered in future
   * `<exp0> !` drops the expression on top of the stack
     * Drops the entire expression, not just the last token
   * `%` drops the entire stack
@@ -127,6 +128,7 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `char0` character `'0'`
   * `hello` string `"Hello, World!"`
   * `null` empty string (0)
+  * `lipsum` a 2000 characters Lorem Ipsum
 
 ## Completeness
 
