@@ -1,9 +1,11 @@
 use logos::Logos;
 use num_traits::{One, Zero};
+use ramp::int::Int;
 use ramp::rational::Rational;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
+use std::io::Write;
 use std::string::String;
 use Found::*;
 use Object::*;
@@ -31,6 +33,7 @@ enum Token {
     })]
     Argument(usize),
 
+    #[regex("\"([^\"\\\\]|\\\\n|\\\\r|\\\\t|\\\\\\\\|\\\\\"|\\\\[0-9a-fA-F][0-9a-fA-F])*\"", |lex| from_string(lex.slice()))]
     #[regex("[\\-\\+]?[0-9]+(/[0-9]+)?", |lex| lex.slice().parse())]
     Number(Rational),
 
@@ -82,24 +85,175 @@ enum Token {
     #[regex("%")]
     Empty,
 
+    #[regex("&")]
+    Format,
+
+    #[regex("\\[\\]")]
+    Approx,
+
     #[error]
     #[regex(";.*", logos::skip)]
     #[regex(r"[ \t\n\f]+", logos::skip)]
     Error,
 }
 
+// Byte iterator for string printing
+// with "buffering" to allow better unrolling
+// Might cause an excess of up to 7 trailing zeroes
+struct Stringer {
+    num: Int,
+    partial: u64,
+    iter: usize,
+}
+
+impl Stringer {
+    // Constructor, consumes the provided Int
+    fn from(num: Int) -> Stringer {
+        Stringer {
+            num: num.abs(),
+            partial: 0,
+            // We could do withoud iter, and reduce the number of (possibly useless) 0-writes
+            // but having it makes the loop more predictable
+            // plus, those 0-writes might not be actually useless
+            iter: 8,
+        }
+    }
+}
+
+impl Iterator for Stringer {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // If all 8 bufferized bytes have been printed
+        // extract new ones
+        if self.iter == 8 {
+            // Returns None if there are no more bytes to extract
+            if self.num.is_zero() {
+                return None;
+            }
+
+            // Otherwise extract 8 more using integer divisions and modulo
+            let (q, r) = self.num.divmod(&Int::from(0x1_00_00_00_00_00_00_00_00u128));
+            // Populate buffer with extracted bytes
+            self.num = q;
+            self.partial = u64::from(&r);
+            self.iter = 0;
+        }
+
+        // Extract one byte from buffer, increase counter, and returns
+        let shift = self.iter * 8;
+        let byte = ((self.partial >> shift) & 255) as u8;
+        self.iter += 1;
+        Some(byte)
+    }
+}
+
+fn from_string(string: &str) -> Rational {
+    // Trims quotes and turns into iter
+    let iter = string.as_bytes()[1..(string.len() - 1)].into_iter();
+    let mut num = Int::zero();
+    let mut esc = false;
+    let mut esc2 = false;
+    let mut prev = 0;
+    let mut stack = Vec::new();
+
+    // Parse escape sequences
+    for ch in iter {
+        // If not escaped, just stack it
+        if !esc {
+            // 92='\\'
+            if *ch != 92 {
+                stack.push(*ch);
+            } else {
+                esc = true;
+            }
+        } else {
+            // Otherwise look at next character
+            esc = false;
+            if !esc2 {
+                // If its a shortcut escape, stack it
+                // Note that num was already shifted from the loop before
+                match *ch {
+                    110 => stack.push(10), // \n
+                    114 => stack.push(13), // \r
+                    116 => stack.push(09), // \t
+                    92 => stack.push(92),  // \\
+                    34 => stack.push(34),  // \"
+                    // If its an hex escape, save it and read the next one to
+                    _ => {
+                        esc = true;
+                        esc2 = true;
+                        prev = from_hex(*ch) << 4;
+                    }
+                }
+            } else {
+                // Now that you have the second hex, stack the whole
+                // Note that num was already shifted from the loop before
+                esc = false;
+                esc2 = false;
+                stack.push(prev + from_hex(*ch));
+            }
+        }
+    }
+
+    // Puts characters into num
+    // accelerated in a similar fashion to stringer
+    while !stack.is_empty() {
+        let mut partial: u64 = 0;
+        let mut count = 0;
+        let mut stop = false;
+
+        // Stack at most 8 bytes into partial, and counts them
+        // Using a while let would drop one byte every 8
+        while count != 8 && !stop {
+            if let Some(ch) = stack.pop() {
+                partial <<= 8;
+                partial += ch as u64;
+                count += 1;
+            } else {
+                stop = true;
+            }
+        }
+
+        // Make space for partial, and add it
+        num <<= 8 * count;
+        num += partial;
+    }
+
+    Rational::from(num)
+}
+
+fn from_hex(hex: u8) -> u8 {
+    if hex >= 48 && hex <= 57 {
+        hex - 48
+    } else if hex >= 65 && hex <= 90 {
+        hex - 55
+    } else if hex >= 97 && hex <= 122 {
+        hex - 87
+    } else {
+        0
+    }
+}
+
 #[derive(PartialEq, Clone)]
 enum Object {
     Variable(Rational),
-    Function(usize, Vec<Token>),
-    Iterative(usize, Vec<Vec<Token>>, Vec<Token>, Vec<Token>),
+    Function(usize, ExecTree),
+    Iterative(usize, Vec<ExecTree>, ExecTree, ExecTree),
 }
 
 // Implement Display for printing
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Number(num) => write!(f, "{}", num),
+            Number(num) => {
+                let (num, den) = num.to_owned().into_parts();
+                if den.is_one() {
+                    write!(f, "{}", num)
+                } else {
+                    write!(f, "{}/{}", num, den)
+                }
+            }
             Plus => write!(f, "+"),
             Minus => write!(f, "-"),
             Times => write!(f, "*"),
@@ -218,6 +372,49 @@ impl Calculator {
                 }
             }
 
+            // 2645608968345021733469237830984 hello world for debugging
+            // Computes the top of the stack and prints it as a string
+            Format => {
+                if let Some(mut num) = self.compute() {
+                    num.normalize();
+                    let (num, den) = num.into_parts();
+                    // Turns the numerator into a vector of bytes and writes them to stdout
+                    // In case of error it just prints a message
+                    // The resulting string will be inverted, this makes it easier to build it
+                    std::io::stdout()
+                        .write(&(Stringer::from(num).collect::<Vec<u8>>())[..])
+                        .unwrap_or_else(|_| {
+                            eprintln!("Cannot print numerator string");
+                            0
+                        });
+                    println!("");
+
+                    // If the denominator is *not* one it does the same, on a new line
+                    // Be carefull with non-coprimes, because they get normalized
+                    if !den.is_one() {
+                        std::io::stdout()
+                            .write(&(Stringer::from(den).collect::<Vec<u8>>())[..])
+                            .unwrap_or_else(|_| {
+                                eprintln!("Cannot print numerator string");
+                                0
+                            });
+                        println!("");
+                    }
+                } else {
+                    // Print error if arguments are missing
+                    eprintln!("Incomplete expression");
+                }
+            }
+
+            // Computes the top of the stack and prints an approximation
+            Approx => {
+                if let Some(num) = self.compute() {
+                    println!("> {}", num.to_f64());
+                } else {
+                    eprintln!("Incomplete expression");
+                }
+            }
+
             // Compute and print top of the stack
             // Put result back in stack
             Partial => {
@@ -295,8 +492,22 @@ impl Calculator {
                 let arity = parse.next().unwrap().parse().unwrap();
 
                 if let FoundAt(index) = self.extract_function(&function_name, arity, index) {
-                    self.table
-                        .insert(function_name, Function(arity, self.stack.split_off(index)));
+                    // Insert a fake function for parsing recursive functions
+                    self.table.insert(
+                        function_name.clone(),
+                        Object::Function(
+                            arity,
+                            ExecTree {
+                                token: Number(Rational::zero()),
+                                arguments: Vec::new(),
+                            },
+                        ),
+                    );
+                    // insert real function
+                    self.table.insert(
+                        function_name,
+                        Function(arity, parse_tree(self.stack.split_off(index), &self.table)),
+                    );
                 } else {
                     eprintln!("Incomplete function declaration");
                 }
@@ -326,6 +537,19 @@ impl Calculator {
                     expressions -= 1;
                 }
 
+                // Insert a fake function for parsing recursive functions
+                // keep the previous object, in case
+                let old = self.table.insert(
+                    function_name.clone(),
+                    Object::Function(
+                        arity,
+                        ExecTree {
+                            token: Number(Rational::zero()),
+                            arguments: Vec::new(),
+                        },
+                    ),
+                );
+                // If arity is correct
                 if arity + 2 == indices.len() {
                     let mut expressions = Vec::new();
 
@@ -333,13 +557,23 @@ impl Calculator {
                         expressions.push(self.stack.split_off(index));
                     }
 
-                    expressions.reverse();
+                    let mut expressions: Vec<ExecTree> = expressions
+                        .into_par_iter()
+                        .map(|exp| parse_tree(exp, &self.table))
+                        .rev()
+                        .collect();
                     let condition = expressions.remove(arity + 1);
                     let last = expressions.remove(arity);
+                    // Insert real function
                     self.table.insert(
                         function_name,
                         Iterative(arity, expressions, last, condition),
                     );
+                } else {
+                    // If arity is incorrect, put the old object back
+                    if let Some(object) = old {
+                        self.table.insert(function_name, object);
+                    }
                 }
             }
 
@@ -376,6 +610,7 @@ impl Calculator {
     }
 }
 
+#[derive(PartialEq, Clone)]
 struct ExecTree {
     token: Token,
     arguments: Vec<ExecTree>,
@@ -485,9 +720,7 @@ fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTree {
 }
 
 fn run_function(
-    name: &String,
-    arity: usize,
-    ops: &Vec<Token>,
+    ops: &ExecTree,
     args: &Vec<Option<Rational>>,
     table: &HashMap<String, Object>,
 ) -> Option<Rational> {
@@ -495,52 +728,8 @@ fn run_function(
     if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
     }
-
-    // Check if the arguments have to high indexes
-    if ops
-        .par_iter()
-        .filter(|op| {
-            if let Argument(index) = op {
-                index >= &arity
-            } else {
-                false
-            }
-        })
-        .count()
-        > 0
-    {
-        eprintln!("Arguments exceeded arity in function: \"{}\"", name);
-        return None;
-    }
-
-    // Substitute the arguments ops stack
-    let mut dirty_ops: Vec<Token> = ops
-        .par_iter()
-        .map(|op| {
-            if let Argument(index) = op {
-                Number(args[*index].clone().unwrap())
-            } else {
-                op.clone()
-            }
-        })
-        .collect();
-
-    // Check if the stack is valid
-    let ops = clip_head(&mut dirty_ops, table);
-    if ops.len() == 0 {
-        eprintln!("Invalid function: \"{}\", dropped stack", name);
-        return None;
-    }
-
-    if dirty_ops.len() != 0 {
-        eprintln!("Warning! function: \"{}\" is still executable but may contain errors!\nIts advisable to update its definition", name);
-    }
-
-    // Build tree
-    let tree = parse_tree(ops, table);
-
     // Execute tree
-    tree.reduce(table)
+    ops.reduce(table, args)
 }
 
 // Tail recursive Fibonacci for testing
@@ -554,37 +743,37 @@ fn run_function(
 impl ExecTree {
     // The result needs to be optional because
     // we don't know in advance if a function contains errors
-    pub fn reduce(self, table: &HashMap<String, Object>) -> Option<Rational> {
+    pub fn reduce(
+        &self,
+        table: &HashMap<String, Object>,
+        args: &Vec<Option<Rational>>,
+    ) -> Option<Rational> {
         // Estract token and arguments from self (so you can move them indipendently)
-        let ExecTree {
-            token,
-            mut arguments,
-        } = self;
+        let token = &self.token;
+        let arguments = &self.arguments;
 
         match token {
             If => {
                 // The if-else statement will not evaluate all of it's arguments
-                let condition = arguments.pop().unwrap().reduce(table);
+                let condition = arguments[2].reduce(table, args);
 
                 if let Some(condition) = condition {
                     if condition.is_zero() {
                         // Execute the right arm
-                        arguments.pop().unwrap().reduce(table)
+                        arguments[1].reduce(table, args)
                     } else {
-                        // Drop the right arm
-                        arguments.pop();
                         // Execute the left arm
-                        arguments.pop().unwrap().reduce(table)
+                        arguments[0].reduce(table, args)
                     }
                 } else {
                     None
                 }
             }
 
-            Number(value) => Some(value),
+            Number(value) => Some(value.clone()),
 
             Identifier(name) => {
-                if let Some(id) = table.get(&name) {
+                if let Some(id) = table.get(name) {
                     match id {
                         Variable(value) => Some(value.clone()),
                         Function(arity, ops) => {
@@ -596,11 +785,11 @@ impl ExecTree {
                             // Start by executing every argument
                             let args: Vec<Option<Rational>> = arguments
                                 .into_par_iter()
-                                .map(|arg| arg.reduce(table))
+                                .map(|arg| arg.reduce(table, args))
                                 .collect();
 
                             // Run function with those arguments
-                            run_function(&name, *arity, ops, &args, table)
+                            run_function(ops, &args, table)
                         }
                         Iterative(arity, exps, last, cond) => {
                             let mut stop = false;
@@ -613,20 +802,20 @@ impl ExecTree {
                             // Start by executing every argument
                             let mut args: Vec<Option<Rational>> = arguments
                                 .into_par_iter()
-                                .map(|arg| arg.reduce(table))
+                                .map(|arg| arg.reduce(table, args))
                                 .collect();
 
                             // Iter untill cond returns a 0 (stop == true)
                             // Don't iter if cond returns None
                             while let (Some(value), false) =
-                                (run_function(&name, *arity, cond, &args, table), stop)
+                                (run_function(cond, &args, table), stop)
                             {
                                 // Check for 0
                                 if !value.is_zero() {
                                     // Calculate new arguments from previous
                                     args = exps
                                         .par_iter()
-                                        .map(|exp| run_function(&name, *arity, &exp, &args, table))
+                                        .map(|exp| run_function(&exp, &args, table))
                                         .collect();
                                 } else {
                                     // Set flag if 0
@@ -635,7 +824,7 @@ impl ExecTree {
                             }
 
                             // Run the exit function on the last set of arguments
-                            run_function(&name, *arity, &last, &args, table)
+                            run_function(&last, &args, table)
                         }
                     }
                 } else {
@@ -643,10 +832,20 @@ impl ExecTree {
                 }
             }
 
+            Argument(index) => {
+                // Check index and return argument (if valid)
+                if let Some(arg) = args.get(*index) {
+                    arg.clone()
+                } else {
+                    eprintln!("Invalid argument");
+                    None
+                }
+            }
+
             ExpMod => {
                 let mut args: Vec<Option<Rational>> = arguments
                     .into_par_iter()
-                    .map(|arg| arg.reduce(table))
+                    .map(|arg| arg.reduce(table, args))
                     .collect();
 
                 // Move args out of array (you can't add borrows)
@@ -671,14 +870,14 @@ impl ExecTree {
             // Arithmetic operations
             _ => {
                 // Start by executing every (2) argument
-                let mut args: Vec<Option<Rational>> = arguments
+                let mut operands: Vec<Option<Rational>> = arguments
                     .into_par_iter()
-                    .map(|arg| arg.reduce(table))
+                    .map(|arg| arg.reduce(table, args))
                     .collect();
 
                 // Move args out of array (you can't add borrows)
-                let b = args.pop();
-                let a = args.pop();
+                let b = operands.pop();
+                let a = operands.pop();
 
                 // Execute only if both arguments computed
                 // One 'Some' is for the pop operation (it will never be None)
@@ -746,7 +945,7 @@ impl Calculator {
         let tree = parse_tree(expression, &self.table);
 
         // Calculate value for exevution tree
-        tree.reduce(&self.table)
+        tree.reduce(&self.table, &Vec::new())
     }
 
     fn compute_all(&mut self) -> Vec<Option<Rational>> {
@@ -773,7 +972,7 @@ impl Calculator {
             .into_par_iter()
             .map(|tree| {
                 if let Some(tree) = tree {
-                    tree.reduce(&self.table)
+                    tree.reduce(&self.table, &Vec::new())
                 } else {
                     None
                 }

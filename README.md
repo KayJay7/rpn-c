@@ -11,7 +11,23 @@ Get it from [crates.io](https://crates.io/crates/rpn-c) with:
 cargo install rpn-c
 ```
 
-NOTE: Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
+#### Hello, World!
+
+```rpn-l
+; "Hello, World!" -> "!dlroW ,olleH" reverse the string
+; "!dlorW ,olleH" -> "21 64 6c 72 6f 57 20 2c 6f 6c 6c 65 48" convert each character into a byte
+; "0x21646c726f57202c6f6c6c6548" -> "2645608968345021733469237830984" convert it single integer
+; use '&' to print
+2645608968345021733469237830984 &
+
+; or, with the new sintax
+"Hello, World!" &
+```
+
+#### Notes on building
+
+Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
+Also, this crate assumes that you are compiling for your local machine, and uses the flag `target-cpu=native` to get better performance by automatically enabling cpu-dependent features, like vectorization. This doesn't allow crosscompilation, if you want to crosscompile for a different architecture, you must select a different target cpu. Please notice that crosscompilation has not been tested.
 
 ## Syntax (rpn-l)
 
@@ -29,6 +45,13 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
     * The sign is optional
     * The denominator is optional (you can't leave a pending `/` without denominator)
+  * `"<some_string"` identifies a string and converts it into an integer
+    * `\n` escape sequence for line feed
+    * `\r` escape sequence for carriage return
+    * `\t` escape sequence for tab
+    * `\\` escape sequence for backslash
+    * `\"` escape sequence for double quotes
+    * `\<hex>` escape sequence for an arbitrary byte (must be two hexadecimal digits)
   * `<variable_name>` identifies a variable
   * `<exp0> <exp1> (+|-|*|/)` performs an arithmetic binary operation
     * Operations have fixed arity so parenthesis are not needed
@@ -65,10 +88,47 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `:` prints the current stack
   * `>` evaluates and prints all the expressions on the stack (starting from top)
   * `<exp0> <` evaluates and duplicate the expression on top of the stack
+  * `<exp0> &` evaluates `<exp0>` and prints it as a string
+    * Reads the numerator per byte, from the least significant, and writes them to stdout
+    * If the denominator is not 1, prints it on a new line
+  * `<exp0> []` evaluates `<exp0>` and prints an approximation
+    * The approximation is calculated converting the number to a double precision floating point number
+    * `RAMP` uses a naive approach for this conversion, so the approximation might be inaccurate
+    * Converting the algorithm used by GMP will be considered in future
   * `<exp0> !` drops the expression on top of the stack
     * Drops the entire expression, not just the last token
   * `%` drops the entire stack
   * `;<some_comment>` comments the rest of the line
+
+### std_lib
+
+`rpn-c` includes a standard library that gets automatically loaded, this library contains several common math operation, mostly for natural numbers.
+
+* Functions
+  * `n floor` rounds `n` to the biggest integer lesser or equal than `n`
+  * `n abs` calculates the absolute value of `n`
+  * `n fib` calculates the `n`-th Fibonacci number
+  * `n m mod` calculates the remainder of `n/m`
+  * `n phi` approximates phi using Fibonacci numbers, the bigger `n` the more accurate the result
+  * `n fact` calculates `n!`
+  * `n k bin` calculates the binomial coefficient `n` over `k`
+  * `n gsum` calculates the sum of the first `n` integers
+  * `a b sift` calculates the sum of all the integer between a and b (included)
+  * `n m ack` calculates the Ackermann function of `n` and `m`; most likely, it won't succed in an useful amount of time
+  * `c s cons` puts the character `c` before the string `s`
+  * `s1 s2 cat` concatenates string `s1` with string `s2`
+  * `s reverse` reverses string `s`
+  * `x to_string` converts *positive* integer `x` into a string
+  * `s str_len` finds length of `s`
+* Variables
+  * `lf` line feed
+  * `cr` carriage return
+  * `chara` character `'a'`
+  * `charA` character `'A'`
+  * `char0` character `'0'`
+  * `hello` string `"Hello, World!"`
+  * `null` empty string (0)
+  * `lipsum` a 2000 characters Lorem Ipsum
 
 ## Completeness
 
