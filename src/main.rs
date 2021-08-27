@@ -21,22 +21,20 @@ use rustyline::error::ReadlineError;
 fn main() {
     let mut calculator = Calculator::new();
     let mut rl = new_editor();
+    // If the file doesn't exists it's not a problem
+    //if rl.load_history(sys::history_file()).is_err() {}
 
     println!(
         "Welcome to rpn-c {}\n press Ctrl-D to quit...",
         env!("CARGO_PKG_VERSION")
     );
 
-    let std_lib = String::from(include_str!("../std_lib.rpnl"));
+    #[cfg(unix)]
+    calculator.parse(String::from(include_str!("../std_lib.rpnl")));
 
-    calculator.parse(std_lib);
+    #[cfg(windows)]
+    calculator.parse(String::from(include_str!("..\\std_lib.rpnl")));
 
-    /*loop {
-        calculator.parse(
-            rl.readline("λ> ")
-                .expect("IO Error occurred while reading from stdin"),
-        );
-    }*/
     loop {
         let readline = rl.readline("λ> ");
         match readline {
@@ -56,4 +54,5 @@ fn main() {
             }
         }
     }
+    //rl.save_history(sys::history_file()).unwrap();
 }
