@@ -70,10 +70,6 @@ $1 256 * $0 + cons|2
 $0 $1 256 * $1 $0 $1 ~ find_end@2
 $1 $0 1 find_end * $0 + cat|2
 
-; str_len
-$0 $1 256 * $2 1 + $2 $0 $1 ~ str_len_aux@3
-$0 1 0 str_len_aux str_len|1
-
 ; WIP for faster find_end
 ;$0 $1 $1 * $2 2 * $2 $0 $1 ~ overshoot@3
 ;find_between@3
@@ -93,6 +89,16 @@ $1 0 16 reverse_chunk $2 340282366920938463463374607431768211456 * +
 $1 0 reverse_slow $2 cat
 $0 reverse_aux@3
 $0 340282366920938463463374607431768211456 \ $0 340282366920938463463374607431768211456 mod 0 reverse_aux reverse|1
+
+; str_len
+; based on reverse
+$0 256 \ 1 $1 + $1 $0 str_len_slow@2
+$0 340282366920938463463374607431768211456 \ 
+$0 340282366920938463463374607431768211456 mod 
+$2 16 +
+$1 0 str_len_slow $2 +
+$0 str_len_aux@3
+$0 340282366920938463463374607431768211456 \ $0 340282366920938463463374607431768211456 mod 0 str_len_aux str_len|1
 
 ; to_string
 ; doesn't work with non positive integers (non naturals)

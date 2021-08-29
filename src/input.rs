@@ -5,7 +5,7 @@ use rustyline::config::OutputStreamType;
 use rustyline::error::ReadlineError;
 use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
 use rustyline::hint::{Hinter, HistoryHinter};
-use rustyline::validate::{self, MatchingBracketValidator, Validator};
+use rustyline::validate::{self, Validator};
 use rustyline::{Cmd, CompletionType, Config, Context, EditMode, Editor, KeyEvent};
 use rustyline_derive::Helper;
 
@@ -13,7 +13,6 @@ use rustyline_derive::Helper;
 pub struct MyHelper {
     completer: FilenameCompleter,
     highlighter: MatchingBracketHighlighter,
-    validator: MatchingBracketValidator,
     hinter: HistoryHinter,
     colored_prompt: String,
 }
@@ -53,7 +52,7 @@ impl Highlighter for MyHelper {
     }
 
     fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        Owned("\x1b[1m".to_owned() + hint + "\x1b[m")
+        Owned("\x1b[2m".to_owned() + hint + "\x1b[0m")
     }
 
     fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
@@ -65,16 +64,17 @@ impl Highlighter for MyHelper {
     }
 }
 
+// Validation is not needed (not here anyway)
 impl Validator for MyHelper {
     fn validate(
         &self,
-        ctx: &mut validate::ValidationContext,
+        _ctx: &mut validate::ValidationContext,
     ) -> rustyline::Result<validate::ValidationResult> {
-        self.validator.validate(ctx)
+        Ok(validate::ValidationResult::Valid(None))
     }
 
     fn validate_while_typing(&self) -> bool {
-        self.validator.validate_while_typing()
+        false
     }
 }
 
@@ -91,12 +91,12 @@ pub fn new_editor() -> Editor<MyHelper> {
         highlighter: MatchingBracketHighlighter::new(),
         hinter: HistoryHinter {},
         colored_prompt: "".to_owned(),
-        validator: MatchingBracketValidator::new(),
     };
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some(h));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
+    rl.bind_sequence(KeyEvent::ctrl('d'), Cmd::EndOfFile);
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
