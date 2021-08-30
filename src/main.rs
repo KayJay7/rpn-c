@@ -14,22 +14,29 @@
 
 mod calculator;
 mod input;
-use crate::calculator::Calculator;
-use crate::input::{new_editor, DATA_LOCAL_DIR};
+use calculator::Calculator;
+use input::{new_editor, Edit, DATA_LOCAL_DIR, HISTORY_PATH};
 use rustyline::error::ReadlineError;
 use std::fs::create_dir_all;
 
 fn main() {
     // Makes sure data_local_dir exists
     if let Some(path) = &*DATA_LOCAL_DIR {
-        if let Err(code) = create_dir_all(path) {
-            eprintln!("Unable to create local data dir. Error: {}", code);
-        }
+        // It's not important if there's no history
+        create_dir_all(path).unwrap_or_else(|_| {});
     }
 
+    // Creates calculator object and prompt
     let mut calculator = Calculator::new();
     let mut rl = new_editor();
 
+    if let Some(path) = &*HISTORY_PATH {
+        if !path.exists() {}
+        rl.load_history(path)
+            .unwrap_or_else(|_| eprintln!("Unable to create local data dir"));
+    }
+
+    // Print welcome
     println!(
         "Welcome to rpn-c {}\n press Ctrl-D to quit...",
         env!("CARGO_PKG_VERSION")
@@ -41,6 +48,18 @@ fn main() {
     #[cfg(windows)]
     calculator.parse(String::from(include_str!("..\\std_lib.rpnl")));
 
+    // REPL loop
+    repl(calculator, &mut rl);
+
+    // Save history in the same file, if possible
+    if let Some(path) = &*HISTORY_PATH {
+        rl.append_history(path)
+            .unwrap_or_else(|_| eprintln!("Unable to append history"));
+    }
+}
+
+fn repl(mut calculator: Calculator, rl: &mut Edit) {
+    // REPL loop
     loop {
         let readline = rl.readline("λ> ");
         match readline {
@@ -48,17 +67,19 @@ fn main() {
                 rl.add_history_entry(line.as_str());
                 calculator.parse(line);
             }
+            // Exit if the program is interrupted (Ctrl+C)
             Err(ReadlineError::Interrupted) => {
                 break;
             }
+            // Exit at end of file (which is caused by the end of a pipe or the input of Ctrl+D)
             Err(ReadlineError::Eof) => {
                 break;
             }
+            // Report any other error
             Err(err) => {
                 println!("Error: {:?}", err);
                 break;
             }
         }
     }
-    //rl.save_history(sys::history_file()).unwrap();
 }

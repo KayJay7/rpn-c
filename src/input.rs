@@ -12,6 +12,8 @@ use rustyline::{Cmd, CompletionType, Config, Context, EditMode, Editor, KeyEvent
 use rustyline_derive::Helper;
 use std::path::{Path, PathBuf};
 
+pub type Edit = Editor<MyHelper>;
+
 lazy_static! {
     pub static ref DIRS: Option<ProjectDirs> = ProjectDirs::from("com", "rpn-lang", "rpn-c");
     pub static ref DATA_LOCAL_DIR: Option<PathBuf> = DIRS
