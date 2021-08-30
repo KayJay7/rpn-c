@@ -119,14 +119,6 @@ pub fn new_editor() -> Editor<MyHelper> {
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
     rl.bind_sequence(KeyEvent::ctrl('d'), Cmd::EndOfFile);
 
-    // If possible load history
-    if let Some(path) = &*HISTORY_PATH {
-        if !path.exists() {
-            eprintln!("{}", path.to_str().unwrap());
-        }
-        if rl.load_history(&path).is_err() {}
-    }
-
     rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{}\x1b[0m", "λ> ");
 
     rl
