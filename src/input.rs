@@ -1,5 +1,6 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 
+use directories::ProjectDirs;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::config::OutputStreamType;
 use rustyline::error::ReadlineError;
@@ -8,6 +9,7 @@ use rustyline::hint::{Hinter, HistoryHinter};
 use rustyline::validate::{self, Validator};
 use rustyline::{Cmd, CompletionType, Config, Context, EditMode, Editor, KeyEvent};
 use rustyline_derive::Helper;
+use std::path::Path;
 
 #[derive(Helper)]
 pub struct MyHelper {
@@ -80,26 +82,40 @@ impl Validator for MyHelper {
 
 pub fn new_editor() -> Editor<MyHelper> {
     env_logger::init();
+
+    // Build configuration
     let config = Config::builder()
         .history_ignore_space(true)
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .output_stream(OutputStreamType::Stdout)
         .build();
+
+    // Build helper struct
     let h = MyHelper {
         completer: FilenameCompleter::new(),
         highlighter: MatchingBracketHighlighter::new(),
         hinter: HistoryHinter {},
         colored_prompt: "".to_owned(),
     };
+
+    // Configure editor with the above two
     let mut rl = Editor::with_config(config);
     rl.set_helper(Some(h));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
     rl.bind_sequence(KeyEvent::ctrl('d'), Cmd::EndOfFile);
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
+
+    // If possible load history
+    if let Some(dirs) = ProjectDirs::from("com", "rpn-lang", "rpn-c") {
+        let path = Path::new(dirs.data_local_dir()).join("history.txt");
+        if !path.exists() {
+            eprintln!("{}", path.to_str().unwrap());
+        }
+        if rl.load_history(&path).is_err() {}
     }
+
     rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{}\x1b[0m", "λ> ");
+
     rl
 }

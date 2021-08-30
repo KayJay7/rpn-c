@@ -22,7 +22,7 @@ fn main() {
     let mut calculator = Calculator::new();
     let mut rl = new_editor();
     // If the file doesn't exists it's not a problem
-    //if rl.load_history(sys::history_file()).is_err() {}
+    // if rl.load_history(sys::history_file()).is_err() {}
 
     println!(
         "Welcome to rpn-c {}\n press Ctrl-D to quit...",
