@@ -593,6 +593,7 @@ version = "0.2.1"
 dependencies = [
  "directories",
  "env_logger",
+ "lazy_static",
  "logos",
  "num-traits",
  "ramp",

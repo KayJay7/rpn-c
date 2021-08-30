@@ -1,6 +1,7 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 
 use directories::ProjectDirs;
+use lazy_static::lazy_static;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
 use rustyline::config::OutputStreamType;
 use rustyline::error::ReadlineError;
@@ -9,7 +10,17 @@ use rustyline::hint::{Hinter, HistoryHinter};
 use rustyline::validate::{self, Validator};
 use rustyline::{Cmd, CompletionType, Config, Context, EditMode, Editor, KeyEvent};
 use rustyline_derive::Helper;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+lazy_static! {
+    pub static ref DIRS: Option<ProjectDirs> = ProjectDirs::from("com", "rpn-lang", "rpn-c");
+    pub static ref DATA_LOCAL_DIR: Option<PathBuf> = DIRS
+        .as_ref()
+        .and_then(|dirs| Some(Path::new(dirs.data_local_dir()).to_path_buf()));
+    pub static ref HISTORY_PATH: Option<PathBuf> = DATA_LOCAL_DIR
+        .as_ref()
+        .and_then(|dir| Some(dir.join("history.txt")));
+}
 
 #[derive(Helper)]
 pub struct MyHelper {
@@ -107,8 +118,7 @@ pub fn new_editor() -> Editor<MyHelper> {
     rl.bind_sequence(KeyEvent::ctrl('d'), Cmd::EndOfFile);
 
     // If possible load history
-    if let Some(dirs) = ProjectDirs::from("com", "rpn-lang", "rpn-c") {
-        let path = Path::new(dirs.data_local_dir()).join("history.txt");
+    if let Some(path) = &*HISTORY_PATH {
         if !path.exists() {
             eprintln!("{}", path.to_str().unwrap());
         }

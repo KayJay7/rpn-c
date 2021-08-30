@@ -15,14 +15,20 @@
 mod calculator;
 mod input;
 use crate::calculator::Calculator;
-use crate::input::new_editor;
+use crate::input::{new_editor, DATA_LOCAL_DIR};
 use rustyline::error::ReadlineError;
+use std::fs::create_dir_all;
 
 fn main() {
+    // Makes sure data_local_dir exists
+    if let Some(path) = &*DATA_LOCAL_DIR {
+        if let Err(code) = create_dir_all(path) {
+            eprintln!("Unable to create local data dir. Error: {}", code);
+        }
+    }
+
     let mut calculator = Calculator::new();
     let mut rl = new_editor();
-    // If the file doesn't exists it's not a problem
-    // if rl.load_history(sys::history_file()).is_err() {}
 
     println!(
         "Welcome to rpn-c {}\n press Ctrl-D to quit...",
