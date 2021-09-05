@@ -99,7 +99,7 @@ pub enum Token {
 
     #[error]
     #[regex(";.*", logos::skip)]
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"[ \t\n\f\r]+", logos::skip)]
     Error,
 }
 

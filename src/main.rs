@@ -58,6 +58,7 @@ fn main() {
     }
 }
 
+#[inline]
 fn repl(mut calculator: Calculator, rl: &mut Edit) {
     // REPL loop
     loop {

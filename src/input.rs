@@ -93,6 +93,7 @@ impl Validator for MyHelper {
     }
 }
 
+#[inline]
 pub fn new_editor() -> Editor<MyHelper> {
     env_logger::init();
 
