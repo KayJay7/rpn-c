@@ -94,8 +94,17 @@ impl ExecTree {
         args: &Vec<Option<Rational>>,
     ) -> Option<Rational> {
         // If the recursive calls to reduce() used in the If, Function, and Iterative branches were
-        // optimised as tail calls, all tail calls in rpn-l would also be optimised; for some reason the
-        // compiler doesn't optimise these calls, so we have to manually optimise them, it's spaghetti
+        // optimised as tail calls, all tail calls in rpn-l would also be optimised; the compiler
+        // can't optimise those calls because Functions creates a new vector to borrow, which will
+        // be destroyed after the call, so the actual last operation in the branch is the
+        // deallocation, no the call. We can manually optimise these calls because when we are
+        // dealing with a tail call, we only need to keep the arguments of the current function,
+        // and if it's not a tail call, a previous stack frame is already holding the current
+        // arguments safe, so we are not replacing anything when we reassign our arguments.
+        // We are implementing a loop that when possible, just mutates the arguments and loops over
+        // instead of calling a different function, similarly to how TCO is done in assembly; we
+        // also need a variable where to keep our arguments when we optimise a tail call.
+        // It gets a bit spaghetti.
 
         // Estract token and arguments from self (so you can move them indipendently)
         // they need to be mutable because they will be modified in loop (part of the TCO)
@@ -104,7 +113,8 @@ impl ExecTree {
         let mut arguments = &self.arguments;
         // These are the arguments of the current function
         let mut args = args;
-        // This is a temporary variable for the arguments of the next function
+        // This holds the arguments of a function that is being called
+        // if it's a tail call, the arguments will override the previous call's ones
         let mut func_args: Vec<Option<Rational>>;
 
         // The loop will just go on unless a return gets called,
