@@ -2,7 +2,6 @@ use super::Token;
 use super::Token::*;
 use num_traits::{One, Zero};
 use ramp::rational::Rational;
-use rayon::prelude::*;
 use std::collections::HashMap;
 use Object::*;
 
@@ -153,11 +152,11 @@ impl ExecTree {
 
                                 // Start by executing every argument
                                 func_args = arguments
-                                    .into_par_iter()
+                                    .into_iter()
                                     .map(|arg| arg.reduce(table, args))
                                     .collect();
 
-                                if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+                                if func_args.iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
 
@@ -176,7 +175,7 @@ impl ExecTree {
 
                                 // Start by executing every argument
                                 func_args = arguments
-                                    .into_par_iter()
+                                    .into_iter()
                                     .map(|arg| arg.reduce(table, args))
                                     .collect();
 
@@ -189,7 +188,7 @@ impl ExecTree {
                                     if !value.is_zero() {
                                         // Calculate new arguments from previous
                                         func_args = exps
-                                            .par_iter()
+                                            .iter()
                                             .map(|exp| run_function(&exp, &func_args, table))
                                             .collect();
                                     } else {
@@ -197,7 +196,7 @@ impl ExecTree {
                                         stop = true;
                                     }
                                 }
-                                if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+                                if func_args.iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
 
@@ -319,7 +318,7 @@ fn run_function(
     table: &HashMap<String, Object>,
 ) -> Option<Rational> {
     // Check is some arguments didn't compute
-    if args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+    if args.iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
     }
     // Execute tree

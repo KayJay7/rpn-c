@@ -2,7 +2,6 @@ use execution::*;
 use logos::Logos;
 use num_traits::{One, Zero};
 use ramp::rational::Rational;
-use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
@@ -419,7 +418,7 @@ impl Calculator {
                     }
 
                     let mut expressions: Vec<ExecTree> = expressions
-                        .into_par_iter()
+                        .into_iter()
                         .map(|exp| parse_tree(exp, &self.table))
                         .rev()
                         .collect();
@@ -511,7 +510,7 @@ impl Calculator {
         }
 
         all_trees
-            .into_par_iter()
+            .into_iter()
             .map(|tree| {
                 if let Some(tree) = tree {
                     tree.reduce(&self.table, &Vec::new())
