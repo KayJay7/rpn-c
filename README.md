@@ -2,7 +2,6 @@
 
 A simple program that alows you to type in math expressions (even on multiple lines) in RPN and evaluate them.
 The program keeps a table of golbal variables so you can store values for later use. All the numbers are stored as multiple precision rationals provided by the [RAMP](https://github.com/Aatch/ramp) library, so your calculations will be limited by just your memory (and rational numbers).
-`rpn-c` is also parallelized using [rayon](https://github.com/rayon-rs/rayon), so you can evaluate multiple expressions at the same time.
 
 This little project started both because of necessity (I wanted a program for writing quick expressions from terminal, and I wanted it to compute big numbers), and to try out using a simple lexer and a simple stack machine (used only up to version 0.1.1). At first I just wanted it to compute simple arithmetics, but midway I started adding some quality of life feature like variables and other commands, there are still some features i plan to add.
 
@@ -79,9 +78,8 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
       * This enables mutual recursion between functions
       * Remember to maintain the same arity or this will break the other function
   * `<exp0> <exp1> ... <expN-1> <expN> <expN+1> <function_name>@<arity>` declares an iterative function of `<arity>` `N`
-    * Equivalent to `<exp0> <exp1> ... <expN-1> <function_name> <expN> <expN+1> ? <function_name>|<arity>`, but better
-    * It's preferable to use iterative functions when possible, they are faster and don't cause stack overflows
-      * Most functions can usually be rewritten this way, the ones that don't are often too complex to be calculated on big inputs in the first place
+    * Equivalent to `<exp0> <exp1> ... <expN-1> <function_name> <expN> <expN+1> ? <function_name>|<arity>`, but slightly more efficient
+    * This was necessary in previouse version of `rpn-c`, when TCO (tail call optimisation) was not implemented, now it's here just for backward compatibility
   * `<exp0> =<variable_name>` evaluates the expression on top of the stack and assigns its value to a variable
   * `<exp0> =` evaluates the expression on top of the stack and prints it
   * `<exp0> #` evaluates the expression on top of the stack and prints it, *and* pushes the result back in the stack
@@ -108,6 +106,7 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `n floor` rounds `n` to the biggest integer lesser or equal than `n`
   * `n abs` calculates the absolute value of `n`
   * `n fib` calculates the `n`-th Fibonacci number
+  * `n tfib` a different implementation of `fib` (mostly for testing purposes
   * `n m mod` calculates the remainder of `n/m`
   * `n phi` approximates phi using Fibonacci numbers, the bigger `n` the more accurate the result
   * `n fact` calculates `n!`
@@ -253,12 +252,12 @@ Near future:
   * [x] Recursion
 * [x] Proof of Turing-Completeness
 * [x] First crates.io release
-* [ ] Solve the stack overflow issue
-  * Rewrite the executor so that it doesn't use recursion
-    * Would probably cause less parallelization
+* [x] Solve the stack overflow issue
   * [x] Allow writing iterative functions (required for 0.2.0)
     * Enables writing functions that don't overflow with few thousands of iterations
+  * Solved by implementing TCO
 * [x] Add parallelization
+  * Removed after 0.2.1 because it caused too much overhead, heavily degrading performance
 * [x] Switch to a non GMP-dependent crate
 * [ ] A decent prompt (with history)
 * [ ] Input from multiple files
@@ -268,7 +267,7 @@ Near future:
 Maybe one day:
 * [ ] Approximation of *some* irrational operations
   * [ ] Approximation of irrational constants like pi, phi, e, log_2(10)
-* [ ] Speeding up tail recursion
+* [x] Speeding up tail recursion
   * [x] Add some form of iteration without recursion
 * [ ] Upgrading to a real LALR (that kinda defeats the whole point)
 * [ ] Programming an actual compiler

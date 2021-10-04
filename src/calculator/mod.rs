@@ -269,7 +269,7 @@ impl Calculator {
             // Computes the top of the stack and prints an approximation
             Approx => {
                 if let Some(num) = self.compute() {
-                    println!("> {}", num.to_f64());
+                    println!("> {:e}", num.to_f64());
                 } else {
                     eprintln!("Incomplete expression");
                 }
