@@ -95,180 +95,202 @@ impl ExecTree {
         args: &Vec<Option<Rational>>,
     ) -> Option<Rational> {
         // Estract token and arguments from self (so you can move them indipendently)
-        let token = &self.token;
-        let arguments = &self.arguments;
+        let mut token = &self.token;
+        let mut arguments = &self.arguments;
+        let mut args = args;
+        let mut func_args: Vec<Option<Rational>>;
 
-        match token {
-            If => {
-                // The if-else statement will not evaluate all of it's arguments
-                let condition = arguments[2].reduce(table, args);
+        loop {
+            match token {
+                If => {
+                    // The if-else statement will not evaluate all of it's arguments
+                    let condition = arguments[2].reduce(table, args);
 
-                if let Some(condition) = condition {
-                    if condition.is_zero() {
-                        // Execute the right arm
-                        arguments[1].reduce(table, args)
+                    if let Some(condition) = condition {
+                        if condition.is_zero() {
+                            // Execute the right arm
+                            token = &arguments[1].token;
+                            arguments = &arguments[1].arguments;
+                        } else {
+                            // Execute the left arm
+                            token = &arguments[0].token;
+                            arguments = &arguments[0].arguments;
+                        }
                     } else {
-                        // Execute the left arm
-                        arguments[0].reduce(table, args)
+                        return None;
                     }
-                } else {
-                    None
                 }
-            }
 
-            Number(value) => Some(value.clone()),
+                Number(value) => {
+                    return Some(value.clone());
+                }
 
-            Identifier(name) => {
-                if let Some(id) = table.get(name) {
-                    match id {
-                        Variable(value) => Some(value.clone()),
-                        Function(arity, ops) => {
-                            // Stop for invalid input before evaluating arguments
-                            if arguments.len() != *arity {
-                                return None;
+                Identifier(name) => {
+                    if let Some(id) = table.get(name) {
+                        match id {
+                            Variable(value) => {
+                                return Some(value.clone());
                             }
+                            Function(arity, ops) => {
+                                // Stop for invalid input before evaluating arguments
+                                if arguments.len() != *arity {
+                                    return None;
+                                }
 
-                            // Start by executing every argument
-                            let args: Vec<Option<Rational>> = arguments
-                                .into_par_iter()
-                                .map(|arg| arg.reduce(table, args))
-                                .collect();
+                                // Start by executing every argument
+                                func_args = arguments
+                                    .into_par_iter()
+                                    .map(|arg| arg.reduce(table, args))
+                                    .collect();
 
-                            // Run function with those arguments
-                            run_function(ops, &args, table)
+                                if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+                                    return None;
+                                }
+                                token = &ops.token;
+                                arguments = &ops.arguments;
+                                args = &func_args;
+
+                                // Run function with those arguments
+                                //run_function(ops, &args, table)
+                            }
+                            Iterative(arity, exps, last, cond) => {
+                                let mut stop = false;
+
+                                // Stop for invalid input before evaluating arguments
+                                if arguments.len() != *arity {
+                                    return None;
+                                }
+
+                                // Start by executing every argument
+                                func_args = arguments
+                                    .into_par_iter()
+                                    .map(|arg| arg.reduce(table, args))
+                                    .collect();
+
+                                // Iter untill cond returns a 0 (stop == true)
+                                // Don't iter if cond returns None
+                                while let (Some(value), false) =
+                                    (run_function(cond, &func_args, table), stop)
+                                {
+                                    // Check for 0
+                                    if !value.is_zero() {
+                                        // Calculate new arguments from previous
+                                        func_args = exps
+                                            .par_iter()
+                                            .map(|exp| run_function(&exp, &func_args, table))
+                                            .collect();
+                                    } else {
+                                        // Set flag if 0
+                                        stop = true;
+                                    }
+                                }
+                                if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
+                                    return None;
+                                }
+                                token = &last.token;
+                                arguments = &last.arguments;
+                                args = &func_args;
+                                // Run the exit function on the last set of arguments
+                                //run_function(&last, &args, table)
+                            }
                         }
-                        Iterative(arity, exps, last, cond) => {
-                            let mut stop = false;
+                    } else {
+                        return None;
+                    }
+                }
 
-                            // Stop for invalid input before evaluating arguments
-                            if arguments.len() != *arity {
-                                return None;
-                            }
+                Argument(index) => {
+                    // Check index and return argument (if valid)
+                    return if let Some(arg) = args.get(*index) {
+                        arg.clone()
+                    } else {
+                        eprintln!("Invalid argument");
+                        None
+                    };
+                }
 
-                            // Start by executing every argument
-                            let mut args: Vec<Option<Rational>> = arguments
-                                .into_par_iter()
-                                .map(|arg| arg.reduce(table, args))
-                                .collect();
+                ExpMod => {
+                    let mut args: Vec<Option<Rational>> = arguments
+                        .into_par_iter()
+                        .map(|arg| arg.reduce(table, args))
+                        .collect();
 
-                            // Iter untill cond returns a 0 (stop == true)
-                            // Don't iter if cond returns None
-                            while let (Some(value), false) =
-                                (run_function(cond, &args, table), stop)
-                            {
-                                // Check for 0
-                                if !value.is_zero() {
-                                    // Calculate new arguments from previous
-                                    args = exps
-                                        .par_iter()
-                                        .map(|exp| run_function(&exp, &args, table))
-                                        .collect();
+                    // Move args out of array (you can't add borrows)
+                    let c = args.pop();
+                    let b = args.pop();
+                    let a = args.pop();
+                    return if let (Some(Some(a)), Some(Some(b)), Some(Some(c))) = (a, b, c) {
+                        // Flooring and converting to Int
+                        let (num, den) = a.into_parts();
+                        let a = num / den;
+                        let (num, den) = b.into_parts();
+                        let b = (num / den).abs();
+                        let (num, den) = c.into_parts();
+                        let c = (num / den).abs();
+
+                        Some(Rational::from(a.pow_mod(&b, &c)))
+                    } else {
+                        None
+                    };
+                }
+
+                // Arithmetic operations
+                _ => {
+                    // Start by executing every (2) argument
+                    let mut operands: Vec<Option<Rational>> = arguments
+                        .into_par_iter()
+                        .map(|arg| arg.reduce(table, args))
+                        .collect();
+
+                    // Move args out of array (you can't add borrows)
+                    let b = operands.pop();
+                    let a = operands.pop();
+
+                    // Execute only if both arguments computed
+                    // One 'Some' is for the pop operation (it will never be None)
+                    return if let (Some(Some(a)), Some(Some(b))) = (a, b) {
+                        match token {
+                            Plus => Some(a + b),
+                            Minus => Some(a - b),
+                            Times => Some(a * b),
+                            Divide => Some(a / b),
+                            PositiveMinus => {
+                                let c = a - &b;
+                                if c > Rational::zero() {
+                                    Some(c)
                                 } else {
-                                    // Set flag if 0
-                                    stop = true;
+                                    Some(Rational::zero())
                                 }
                             }
-
-                            // Run the exit function on the last set of arguments
-                            run_function(&last, &args, table)
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
-
-            Argument(index) => {
-                // Check index and return argument (if valid)
-                if let Some(arg) = args.get(*index) {
-                    arg.clone()
-                } else {
-                    eprintln!("Invalid argument");
-                    None
-                }
-            }
-
-            ExpMod => {
-                let mut args: Vec<Option<Rational>> = arguments
-                    .into_par_iter()
-                    .map(|arg| arg.reduce(table, args))
-                    .collect();
-
-                // Move args out of array (you can't add borrows)
-                let c = args.pop();
-                let b = args.pop();
-                let a = args.pop();
-                if let (Some(Some(a)), Some(Some(b)), Some(Some(c))) = (a, b, c) {
-                    // Flooring and converting to Int
-                    let (num, den) = a.into_parts();
-                    let a = num / den;
-                    let (num, den) = b.into_parts();
-                    let b = (num / den).abs();
-                    let (num, den) = c.into_parts();
-                    let c = (num / den).abs();
-
-                    Some(Rational::from(a.pow_mod(&b, &c)))
-                } else {
-                    None
-                }
-            }
-
-            // Arithmetic operations
-            _ => {
-                // Start by executing every (2) argument
-                let mut operands: Vec<Option<Rational>> = arguments
-                    .into_par_iter()
-                    .map(|arg| arg.reduce(table, args))
-                    .collect();
-
-                // Move args out of array (you can't add borrows)
-                let b = operands.pop();
-                let a = operands.pop();
-
-                // Execute only if both arguments computed
-                // One 'Some' is for the pop operation (it will never be None)
-                if let (Some(Some(a)), Some(Some(b))) = (a, b) {
-                    match token {
-                        Plus => Some(a + b),
-                        Minus => Some(a - b),
-                        Times => Some(a * b),
-                        Divide => Some(a / b),
-                        PositiveMinus => {
-                            let c = a - &b;
-                            if c > Rational::zero() {
-                                Some(c)
-                            } else {
-                                Some(Rational::zero())
+                            IntegerDiv => {
+                                let (num, den) = (a / b).into_parts();
+                                Some(Rational::from(num / den))
                             }
-                        }
-                        IntegerDiv => {
-                            let (num, den) = (a / b).into_parts();
-                            Some(Rational::from(num / den))
-                        }
-                        Exp => {
-                            //Flooring and converting to Int
-                            let mut a = a;
-                            let (num, den) = b.into_parts();
-                            let mut b = (num / den).abs();
-                            let mut result = Rational::one();
-                            while !b.is_zero() {
-                                if !b.is_even() {
-                                    result *= &a;
+                            Exp => {
+                                //Flooring and converting to Int
+                                let mut a = a;
+                                let (num, den) = b.into_parts();
+                                let mut b = (num / den).abs();
+                                let mut result = Rational::one();
+                                while !b.is_zero() {
+                                    if !b.is_even() {
+                                        result *= &a;
+                                    }
+                                    b /= 2;
+                                    // Unfortunately we have to clone
+                                    // the size of a would double anyway
+                                    a *= a.clone();
                                 }
-                                b /= 2;
-                                // Unfortunately we have to clone
-                                // the size of a would double anyway
-                                a *= a.clone();
+                                Some(result)
                             }
-                            Some(result)
-                        }
 
-                        // All the other tokens will never enter the tree
-                        _ => panic!("Corrupted stack"),
-                    }
-                } else {
-                    // Return None if an argument didn't compute
-                    None
+                            // All the other tokens will never enter the tree
+                            _ => panic!("Corrupted stack"),
+                        }
+                    } else {
+                        // Return None if an argument didn't compute
+                        None
+                    };
                 }
             }
         }
