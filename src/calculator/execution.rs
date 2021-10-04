@@ -94,12 +94,23 @@ impl ExecTree {
         table: &HashMap<String, Object>,
         args: &Vec<Option<Rational>>,
     ) -> Option<Rational> {
+        // If the recursive calls to reduce() used in the If, Function, and Iterative branches were
+        // optimised as tail calls, all tail calls in rpn-l would also be optimised; for some reason the
+        // compiler doesn't optimise these calls, so we have to manually optimise them, it's spaghetti
+
         // Estract token and arguments from self (so you can move them indipendently)
+        // they need to be mutable because they will be modified in loop (part of the TCO)
         let mut token = &self.token;
+        // These arguments are the branches of the tree
         let mut arguments = &self.arguments;
+        // These are the arguments of the current function
         let mut args = args;
+        // This is a temporary variable for the arguments of the next function
         let mut func_args: Vec<Option<Rational>>;
 
+        // The loop will just go on unless a return gets called,
+        // tail calls will just modify the argument variables and let the loop go on
+        // other operations will just make some recursive calls and return the combined result
         loop {
             match token {
                 If => {
@@ -109,14 +120,17 @@ impl ExecTree {
                     if let Some(condition) = condition {
                         if condition.is_zero() {
                             // Execute the right arm
+                            // This would be a tail call
                             token = &arguments[1].token;
                             arguments = &arguments[1].arguments;
                         } else {
                             // Execute the left arm
+                            // This would be a tail call
                             token = &arguments[0].token;
                             arguments = &arguments[0].arguments;
                         }
                     } else {
+                        // Stops in case of errors
                         return None;
                     }
                 }
@@ -146,12 +160,11 @@ impl ExecTree {
                                 if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
+
+                                // This would be a tail call
                                 token = &ops.token;
                                 arguments = &ops.arguments;
                                 args = &func_args;
-
-                                // Run function with those arguments
-                                //run_function(ops, &args, table)
                             }
                             Iterative(arity, exps, last, cond) => {
                                 let mut stop = false;
@@ -187,11 +200,11 @@ impl ExecTree {
                                 if func_args.par_iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
+
+                                // This would be a tail call
                                 token = &last.token;
                                 arguments = &last.arguments;
                                 args = &func_args;
-                                // Run the exit function on the last set of arguments
-                                //run_function(&last, &args, table)
                             }
                         }
                     } else {
@@ -210,16 +223,12 @@ impl ExecTree {
                 }
 
                 ExpMod => {
-                    let mut args: Vec<Option<Rational>> = arguments
-                        .into_par_iter()
-                        .map(|arg| arg.reduce(table, args))
-                        .collect();
+                    // Evaluates arguments
+                    let a = arguments[0].reduce(table, args);
+                    let b = arguments[1].reduce(table, args);
+                    let c = arguments[2].reduce(table, args);
 
-                    // Move args out of array (you can't add borrows)
-                    let c = args.pop();
-                    let b = args.pop();
-                    let a = args.pop();
-                    return if let (Some(Some(a)), Some(Some(b)), Some(Some(c))) = (a, b, c) {
+                    return if let (Some(a), Some(b), Some(c)) = (a, b, c) {
                         // Flooring and converting to Int
                         let (num, den) = a.into_parts();
                         let a = num / den;
@@ -234,26 +243,27 @@ impl ExecTree {
                     };
                 }
 
-                // Arithmetic operations
+                // Arithmetic operations, all binary operations
                 _ => {
-                    // Start by executing every (2) argument
-                    let mut operands: Vec<Option<Rational>> = arguments
-                        .into_par_iter()
-                        .map(|arg| arg.reduce(table, args))
-                        .collect();
-
-                    // Move args out of array (you can't add borrows)
-                    let b = operands.pop();
-                    let a = operands.pop();
+                    // Evaluates arguments
+                    let a = arguments[0].reduce(table, args);
+                    let b = arguments[1].reduce(table, args);
 
                     // Execute only if both arguments computed
                     // One 'Some' is for the pop operation (it will never be None)
-                    return if let (Some(Some(a)), Some(Some(b))) = (a, b) {
+                    return if let (Some(a), Some(b)) = (a, b) {
                         match token {
                             Plus => Some(a + b),
                             Minus => Some(a - b),
                             Times => Some(a * b),
-                            Divide => Some(a / b),
+                            Divide => {
+                                if !b.is_zero() {
+                                    Some(a / b)
+                                } else {
+                                    eprintln!("Cannot divide by zero");
+                                    None
+                                }
+                            }
                             PositiveMinus => {
                                 let c = a - &b;
                                 if c > Rational::zero() {
@@ -263,8 +273,13 @@ impl ExecTree {
                                 }
                             }
                             IntegerDiv => {
-                                let (num, den) = (a / b).into_parts();
-                                Some(Rational::from(num / den))
+                                if !b.is_zero() {
+                                    let (num, den) = (a / b).into_parts();
+                                    Some(Rational::from(num / den))
+                                } else {
+                                    eprintln!("Cannot divide by zero");
+                                    None
+                                }
                             }
                             Exp => {
                                 //Flooring and converting to Int
