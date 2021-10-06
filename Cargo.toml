@@ -1,7 +1,7 @@
 [package]
 name = "rpn-c"
 description = "A calculator environment using Reverse Polish Notation and multiple precision numbers"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["alvise <alvisebruniera@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"

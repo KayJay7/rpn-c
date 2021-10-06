@@ -263,7 +263,7 @@ Near future:
     * Enables writing functions that don't overflow with few thousands of iterations
   * Solved by implementing TCO
 * [x] Add parallelization
-  * Removed after 0.2.1 because it caused too much overhead, heavily degrading performance
+  * Removed in 0.2.2 because it caused too much overhead, heavily degrading performance
 * [x] Switch to a non GMP-dependent crate
 * [x] A decent prompt (with history)
   * [ ] Get configuration from a config file
