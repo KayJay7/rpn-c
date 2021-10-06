@@ -1,3 +1,4 @@
+use super::utils::floor_abs;
 use super::Token;
 use super::Token::*;
 use num_traits::{One, Zero};
@@ -28,6 +29,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
     for token in stack {
         match token {
             Identifier(ref name) => match table.get(name) {
+                // N-ary expressions
                 Some(Function(arity, _)) | Some(Iterative(arity, _, _, _)) => {
                     let len = arguments.len();
                     let args = arguments.split_off(len - arity);
@@ -36,6 +38,8 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
                         arguments: args,
                     });
                 }
+
+                // Variables
                 _ => {
                     arguments.push(ExecTree {
                         token,
@@ -44,6 +48,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
                 }
             },
 
+            // Unary expresions
             Number(_) | Argument(_) => {
                 arguments.push(ExecTree {
                     token,
@@ -51,6 +56,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
                 });
             }
 
+            // Binary expressions
             Plus | Minus | Times | Divide | PositiveMinus | IntegerDiv | Exp => {
                 let len = arguments.len();
                 let args = arguments.split_off(len - 2);
@@ -60,6 +66,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
                 });
             }
 
+            // Ternary expressions
             If | ExpMod => {
                 let len = arguments.len();
                 let args = arguments.split_off(len - 3);
@@ -78,7 +85,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
 }
 
 // Tail recursive Fibonacci for testing
-// $1 $0 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec tfib|1
+// $1 $1 + $2 1 ~ fib_rec $1 $2 ? fib_rec|3 1 0 $0 fib_rec tfib|1
 //
 // Naive Fibonacci for testing
 // $0 1 ~ nfib $0 2 ~ nfib + $0 $0 1 ~ ? nfib|1
@@ -87,7 +94,7 @@ pub fn parse_tree(stack: Vec<Token>, table: &HashMap<String, Object>) -> ExecTre
 // $1 $0 $1 + $2 1 ~ $1 $2 fib_aux@3 1 0 $0 fib_aux fib|1
 impl ExecTree {
     // The result needs to be optional because
-    // we don't know in advance if a function contains errors
+    // we don't know in advance if an expression contains errors
     pub fn reduce(
         &self,
         table: &HashMap<String, Object>,
@@ -166,6 +173,7 @@ impl ExecTree {
                                     .map(|arg| arg.reduce(table, args))
                                     .collect();
 
+                                // Check if some arguments didn't compute
                                 if func_args.iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
@@ -194,7 +202,7 @@ impl ExecTree {
                                 while let (Some(value), false) =
                                     (run_function(cond, &func_args, table), stop)
                                 {
-                                    // Check for 0
+                                    // Check for 0 (the loop stops at 0)
                                     if !value.is_zero() {
                                         // Calculate new arguments from previous
                                         func_args = exps
@@ -206,6 +214,8 @@ impl ExecTree {
                                         stop = true;
                                     }
                                 }
+
+                                // Check if some arguments didn't compute
                                 if func_args.iter().filter(|arg| arg.is_none()).count() > 0 {
                                     return None;
                                 }
@@ -240,11 +250,16 @@ impl ExecTree {
                     return if let (Some(a), Some(b), Some(c)) = (a, b, c) {
                         // Flooring and converting to Int
                         let (num, den) = a.into_parts();
+                        if !den.is_one() {
+                            eprintln!("Base was not an integer in modulo exponentiation");
+                        }
                         let a = num / den;
-                        let (num, den) = b.into_parts();
-                        let b = (num / den).abs();
-                        let (num, den) = c.into_parts();
-                        let c = (num / den).abs();
+                        let b = floor_abs(b, "Exponent", "modulo exponentiation");
+                        let c = floor_abs(c, "Modulo", "modulo exponentiation");
+                        if c.eq(&Rational::zero()) {
+                            eprintln!("Modulo cannot be zero");
+                            return None;
+                        }
 
                         Some(Rational::from(a.pow_mod(&b, &c)))
                     } else {
@@ -293,8 +308,7 @@ impl ExecTree {
                             Exp => {
                                 //Flooring and converting to Int
                                 let mut a = a;
-                                let (num, den) = b.into_parts();
-                                let mut b = (num / den).abs();
+                                let mut b = floor_abs(b, "Exponent", "exponentiation");
                                 let mut result = Rational::one();
                                 while !b.is_zero() {
                                     if !b.is_even() {
@@ -327,7 +341,7 @@ fn run_function(
     args: &Vec<Option<Rational>>,
     table: &HashMap<String, Object>,
 ) -> Option<Rational> {
-    // Check is some arguments didn't compute
+    // Check if some arguments didn't compute
     if args.iter().filter(|arg| arg.is_none()).count() > 0 {
         return None;
     }

@@ -28,6 +28,12 @@ cargo install rpn-c
 Building requires a nightly Rust toolchain, because `RAMP` uses nightly features in order to get better performances (namely: lazy_statics, intrinsics, inline assembly). Also `RAMP` doesn't support cross-compilation, but that's a minor inconvenience.
 Also, this crate assumes that you are compiling for your local machine, and uses the flag `target-cpu=native` to get better performance by automatically enabling cpu-dependent features, like vectorization. This doesn't allow crosscompilation, if you want to crosscompile for a different architecture, you must select a different target cpu. Please notice that crosscompilation has not been tested.
 
+#### Files
+
+Support for input and output files will be added in future.
+
+The prompt history and configuration files can be found in your local data directory according to [OS dependent standards](https://crates.io/crates/directories).
+
 ## Syntax (rpn-l)
 
 rpn-l is the language used by (and developed for) rpn-c. It's not really user friendly, but it works, and will allow you to write your own scripts and functions for your quick calculation needs.
@@ -44,7 +50,7 @@ This looks like a limitation, but immutability allows the evaluation tree to be 
   * `(+|-)<some_decimal_number>(/<another_number>)` identifies a numeric constant (a fraction)
     * The sign is optional
     * The denominator is optional (you can't leave a pending `/` without denominator)
-  * `"<some_string"` identifies a string and converts it into an integer
+  * `"<some_string>"` identifies a string and converts it into an integer
     * `\n` escape sequence for line feed
     * `\r` escape sequence for carriage return
     * `\t` escape sequence for tab
@@ -259,7 +265,8 @@ Near future:
 * [x] Add parallelization
   * Removed after 0.2.1 because it caused too much overhead, heavily degrading performance
 * [x] Switch to a non GMP-dependent crate
-* [ ] A decent prompt (with history)
+* [x] A decent prompt (with history)
+  * [ ] Get configuration from a config file
 * [ ] Input from multiple files
   * [ ] Support for shebang
 * [ ] Output to file (silent mode)
