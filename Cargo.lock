@@ -413,9 +413,9 @@ dependencies = [
 
 [[package]]
 name = "ramp"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "250c31b8fbe2c3bc91c815c7c32806e118d1b13d61b033eb104d047adaa46117"
+checksum = "b15a4003930ef74c9645a257f9ec85e3a48b6b91b7a2f0b63bd67499a614c0c8"
 dependencies = [
  "cc",
  "hamming",
@@ -505,7 +505,7 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "rpn-c"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "directories",
  "env_logger",
